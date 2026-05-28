@@ -45,6 +45,11 @@ export default function Dashboard() {
         .order("created_at", { ascending: false }),
     ]);
 
+    if (locRes.error) console.error("locations error:", locRes.error);
+    if (vendorRes.error) console.error("vendors error:", vendorRes.error);
+    if (empRes.error) console.error("employees error:", empRes.error);
+    if (issueRes.error) console.error("issues error:", issueRes.error);
+
     if (locRes.data) setLocations((locRes.data as Location[]).sort(locationSort));
     if (vendorRes.data) setVendors(vendorRes.data as Vendor[]);
     if (empRes.data) setEmployees(empRes.data as Employee[]);
