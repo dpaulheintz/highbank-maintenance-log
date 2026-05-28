@@ -8,7 +8,7 @@ const VENDOR_CATEGORIES: VendorCategory[] = [
   "Plumber", "HVAC", "Electrician", "General Contractor", "Pest Control", "Cleaning", "Other",
 ];
 
-const emptyVendor = { name: "", category: "" as VendorCategory, phone: "", email: "", notes: "" };
+const emptyVendor = { name: "", contact: "", category: "" as VendorCategory, phone: "", email: "", notes: "" };
 
 export default function AdminVendors() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -25,7 +25,14 @@ export default function AdminVendors() {
 
   function startEdit(v: Vendor) {
     setEditingId(v.id);
-    setDraft({ name: v.name, category: (v.category || "") as VendorCategory, phone: v.phone || "", email: v.email || "", notes: v.notes || "" });
+    setDraft({
+      name: v.name,
+      contact: v.contact || "",
+      category: (v.category || "") as VendorCategory,
+      phone: v.phone || "",
+      email: v.email || "",
+      notes: v.notes || "",
+    });
     setAdding(false);
   }
 
@@ -46,6 +53,7 @@ export default function AdminVendors() {
     setSaving(true);
     const payload = {
       name: draft.name.trim(),
+      contact: draft.contact.trim() || null,
       category: draft.category || null,
       phone: draft.phone.trim() || null,
       email: draft.email.trim() || null,
@@ -109,6 +117,7 @@ export default function AdminVendors() {
                   {v.category && <span className="text-xs text-text-muted bg-bg px-2 py-0.5 rounded">{v.category}</span>}
                 </div>
                 <div className="flex gap-4 mt-1 text-xs text-text-muted">
+                  {v.contact && <span>{v.contact}</span>}
                   {v.phone && <span>{v.phone}</span>}
                   {v.email && <span>{v.email}</span>}
                 </div>
@@ -126,8 +135,12 @@ function VendorForm({ draft, setDraft }: { draft: typeof emptyVendor; setDraft: 
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="col-span-2">
-        <label className="block text-xs text-text-muted mb-1">Name *</label>
+        <label className="block text-xs text-text-muted mb-1">Company Name *</label>
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="edit-input" />
+      </div>
+      <div className="col-span-2">
+        <label className="block text-xs text-text-muted mb-1">Primary Contact</label>
+        <input value={draft.contact} onChange={(e) => setDraft({ ...draft, contact: e.target.value })} placeholder="Contact person name" className="edit-input" />
       </div>
       <div>
         <label className="block text-xs text-text-muted mb-1">Category</label>

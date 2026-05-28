@@ -24,7 +24,11 @@
       "Bash(git commit -m 'Fix: add all app files *)",
       "Bash(git commit -m 'Fix ESLint config: import FlatCompat from @eslint/eslintrc *)",
       "mcp__ac924350-6bb1-4ac2-9a75-960b61f00995__list_projects",
-      "mcp__ac924350-6bb1-4ac2-9a75-960b61f00995__execute_sql"
+      "mcp__ac924350-6bb1-4ac2-9a75-960b61f00995__execute_sql",
+      "Bash(git commit -m 'Add admin panel, employee owner flow, and email notifications *)",
+      "Bash(git commit -m 'Route emails by location manager with Charles always CC'\\\\''d *)",
+      "Bash(git commit -m 'Fix email routing: Charles via env, Lindsay manages Westerville + PO Box 21 *)",
+      "Bash(git commit -m 'Fix locations, seed employees, update vendor form *)"
     ]
   }
 }

@@ -62,7 +62,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
         completed_at: completedAt,
       })
       .eq("id", issue.id)
-      .select("*, vendors(*), employees(*)")
+      .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
       .single();
 
     setSaving(false);

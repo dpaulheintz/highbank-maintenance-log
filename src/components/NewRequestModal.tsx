@@ -73,7 +73,7 @@ export default function NewRequestModal({ locations, vendors, employees, onClose
         reported_by: reportedBy.trim() || null,
         completed_at: null,
       })
-      .select("*, vendors(*), employees(*)")
+      .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
       .single();
 
     setSubmitting(false);

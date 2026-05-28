@@ -28,6 +28,7 @@ export interface Location {
 export interface Vendor {
   id: string;
   name: string;
+  contact: string | null;
   category: VendorCategory | null;
   phone: string | null;
   email: string | null;

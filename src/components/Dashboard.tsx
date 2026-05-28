@@ -41,7 +41,7 @@ export default function Dashboard() {
       supabase.from("employees").select("*").order("name"),
       supabase
         .from("issues")
-        .select("*, vendors(*), employees(*)")
+        .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
         .order("created_at", { ascending: false }),
     ]);
 
