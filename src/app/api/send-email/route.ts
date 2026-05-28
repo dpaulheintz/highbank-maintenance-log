@@ -3,21 +3,21 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Charles Carter — CC'd on every notification
-const CHARLES = "ccarter@highbankco.com";
+// NOTIFY_EMAILS = Charles Carter — receives every notification
+const ALWAYS_NOTIFY = (process.env.NOTIFY_EMAILS || "").split(",").filter(Boolean);
 
 // Location-specific manager mapping
 const LOCATION_MANAGERS: Record<string, string> = {
   "High Bank Distillery Grandview": "kbosse@highbankco.com",
   "High Bank Distillery Gahanna": "esparks@highbankco.com",
   "High Bank Distillery Westerville": "lholmes@highbankco.com",
-  "High Bank PO Box 21": "ccarter@highbankco.com",
+  "High Bank PO Box 21": "lholmes@highbankco.com",
 };
 
 /**
  * Build the recipient lists for every email:
  *  to  = assigned owner + location manager (deduplicated)
- *  cc  = Charles Carter (always, deduplicated from `to`)
+ *  cc  = NOTIFY_EMAILS / Charles Carter (always, deduplicated from `to`)
  */
 function buildRecipients(
   locationName: string,
@@ -32,9 +32,9 @@ function buildRecipients(
   const locManager = LOCATION_MANAGERS[locationName];
   if (locManager) toSet.add(locManager);
 
-  // 3. Charles always on CC (remove from `to` if already there to avoid dupes)
+  // 3. NOTIFY_EMAILS (Charles) always on CC, deduplicated from `to`
   const to = [...toSet];
-  const cc = to.includes(CHARLES) ? [] : [CHARLES];
+  const cc = ALWAYS_NOTIFY.filter((e) => !to.includes(e));
 
   return { to, cc };
 }
@@ -147,8 +147,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No recipients" }, { status: 400 });
     }
 
-    // If `to` is empty but we have CC, move Charles to `to` (Resend requires at least one `to`)
-    const finalTo = to.length > 0 ? to : [CHARLES];
+    // Resend requires at least one `to` — fall back to NOTIFY_EMAILS if needed
+    const finalTo = to.length > 0 ? to : [...ALWAYS_NOTIFY];
     const finalCc = to.length > 0 && cc.length > 0 ? cc : undefined;
 
     const { data, error } = await resend.emails.send({
