@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import type { Location, Vendor, IssueWithVendor } from "@/lib/types";
+import type { Location, Vendor, Employee, IssueWithRelations } from "@/lib/types";
 import IssueCard from "./IssueCard";
 import FilterBar from "./FilterBar";
 import NewRequestModal from "./NewRequestModal";
+import Sidebar from "./Sidebar";
 
-const LOCATION_ORDER = ["Grandview", "Gahanna", "Westerville"];
+const LOCATION_ORDER = ["Grandview", "Gahanna", "Westerville", "PO Box 21"];
 
 function locationSort(a: Location, b: Location): number {
   const ai = LOCATION_ORDER.findIndex((n) => a.name.includes(n));
@@ -16,13 +17,14 @@ function locationSort(a: Location, b: Location): number {
 }
 
 function shortName(name: string): string {
-  return name.replace("High Bank Distillery ", "");
+  return name.replace("High Bank Distillery ", "").replace("High Bank ", "");
 }
 
 export default function Dashboard() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [issues, setIssues] = useState<IssueWithVendor[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [issues, setIssues] = useState<IssueWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -33,18 +35,20 @@ export default function Dashboard() {
   });
 
   const fetchData = useCallback(async () => {
-    const [locRes, vendorRes, issueRes] = await Promise.all([
+    const [locRes, vendorRes, empRes, issueRes] = await Promise.all([
       supabase.from("locations").select("*"),
       supabase.from("vendors").select("*").order("name"),
+      supabase.from("employees").select("*").order("name"),
       supabase
         .from("issues")
-        .select("*, vendors(*)")
+        .select("*, vendors(*), employees(*)")
         .order("created_at", { ascending: false }),
     ]);
 
     if (locRes.data) setLocations((locRes.data as Location[]).sort(locationSort));
     if (vendorRes.data) setVendors(vendorRes.data as Vendor[]);
-    if (issueRes.data) setIssues(issueRes.data as IssueWithVendor[]);
+    if (empRes.data) setEmployees(empRes.data as Employee[]);
+    if (issueRes.data) setIssues(issueRes.data as IssueWithRelations[]);
     setLoading(false);
   }, []);
 
@@ -52,16 +56,16 @@ export default function Dashboard() {
     fetchData();
   }, [fetchData]);
 
-  function handleCreated(issue: IssueWithVendor) {
+  function handleCreated(issue: IssueWithRelations) {
     setIssues((prev) => [issue, ...prev]);
     setModalOpen(false);
   }
 
-  function handleUpdate(updated: IssueWithVendor) {
+  function handleUpdate(updated: IssueWithRelations) {
     setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
   }
 
-  function filteredIssues(locationId: string): IssueWithVendor[] {
+  function filteredIssues(locationId: string): IssueWithRelations[] {
     return issues.filter((issue) => {
       if (issue.location_id !== locationId) return false;
       if (!filters.showCompleted && issue.status === "Complete") return false;
@@ -70,6 +74,10 @@ export default function Dashboard() {
       if (filters.priority && issue.priority !== filters.priority) return false;
       return true;
     });
+  }
+
+  function getLocationName(id: string): string {
+    return locations.find((l) => l.id === id)?.name || "";
   }
 
   if (loading) {
@@ -82,9 +90,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-40 bg-bg/90 backdrop-blur-md border-b border-border">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div>
+      <Sidebar />
+
+      <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur-md border-b border-border">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="pl-12">
             <h1 className="font-display text-xl sm:text-2xl text-text tracking-tight">
               High Bank Distillery
             </h1>
@@ -101,16 +111,16 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="max-w-[1600px] mx-auto w-full px-4 sm:px-6 py-4">
+      <div className="max-w-[1800px] mx-auto w-full px-4 sm:px-6 py-4">
         <FilterBar filters={filters} onChange={setFilters} />
       </div>
 
-      <main className="flex-1 max-w-[1600px] mx-auto w-full px-4 sm:px-6 pb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <main className="flex-1 max-w-[1800px] mx-auto w-full px-4 sm:px-6 pb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
           {locations.map((location) => {
             const locIssues = filteredIssues(location.id);
             return (
-              <div key={location.id} className="flex flex-col">
+              <div key={location.id} className="flex flex-col min-w-0">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-display text-base text-text">
                     {shortName(location.name)}
@@ -130,6 +140,8 @@ export default function Dashboard() {
                         key={issue.id}
                         issue={issue}
                         vendors={vendors}
+                        employees={employees}
+                        locationName={getLocationName(issue.location_id)}
                         onUpdate={handleUpdate}
                       />
                     ))
@@ -145,6 +157,7 @@ export default function Dashboard() {
         <NewRequestModal
           locations={locations}
           vendors={vendors}
+          employees={employees}
           onClose={() => setModalOpen(false)}
           onCreated={handleCreated}
         />

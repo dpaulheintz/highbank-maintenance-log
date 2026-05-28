@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { IssueWithVendor, Vendor, Category, Priority, Status } from "@/lib/types";
+import type { IssueWithRelations, Vendor, Employee, Category, Priority, Status } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { sendEmail, buildEmailIssue, isOverdue as checkOverdue } from "@/lib/email";
 import StatusBadge from "./StatusBadge";
 import PriorityBadge from "./PriorityBadge";
 import CommentSection from "./CommentSection";
@@ -10,11 +11,6 @@ import CommentSection from "./CommentSection";
 const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest"];
 const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Emergency"];
 const STATUSES: Status[] = ["Open", "In Progress", "Awaiting Parts", "Complete"];
-
-function isOverdue(issue: IssueWithVendor): boolean {
-  if (!issue.due_date || issue.status === "Complete") return false;
-  return new Date(issue.due_date) < new Date(new Date().toDateString());
-}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
@@ -26,18 +22,21 @@ function formatDate(dateStr: string | null): string {
 }
 
 interface Props {
-  issue: IssueWithVendor;
+  issue: IssueWithRelations;
   vendors: Vendor[];
-  onUpdate: (updated: IssueWithVendor) => void;
+  employees: Employee[];
+  locationName: string;
+  onUpdate: (updated: IssueWithRelations) => void;
 }
 
-export default function IssueCard({ issue, vendors, onUpdate }: Props) {
+export default function IssueCard({ issue, vendors, employees, locationName, onUpdate }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(issue);
 
-  const overdue = isOverdue(issue);
+  const overdue = checkOverdue(issue.due_date, issue.status);
+  const ownerName = issue.employees?.name || issue.owner || null;
 
   async function save() {
     setSaving(true);
@@ -57,17 +56,54 @@ export default function IssueCard({ issue, vendors, onUpdate }: Props) {
         priority: draft.priority,
         status: draft.status,
         owner: draft.owner,
+        owner_id: draft.owner_id,
         vendor_id: draft.vendor_id,
         due_date: draft.due_date,
         completed_at: completedAt,
       })
       .eq("id", issue.id)
-      .select("*, vendors(*)")
+      .select("*, vendors(*), employees(*)")
       .single();
 
     setSaving(false);
     if (!error && data) {
-      onUpdate(data as IssueWithVendor);
+      const updated = data as IssueWithRelations;
+      const vendorName = updated.vendors?.name || null;
+      const newOwner = employees.find((e) => e.id === updated.owner_id);
+      const emailIssue = buildEmailIssue(updated, locationName, vendorName);
+
+      // Owner changed
+      if (draft.owner_id && draft.owner_id !== issue.owner_id) {
+        sendEmail({
+          type: "owner_assigned",
+          issue: emailIssue,
+          ownerEmail: newOwner?.email,
+          ownerName: newOwner?.name,
+        });
+      }
+
+      // Status changed
+      if (draft.status !== issue.status) {
+        sendEmail({
+          type: "status_changed",
+          issue: emailIssue,
+          ownerEmail: newOwner?.email,
+          ownerName: newOwner?.name,
+          oldStatus: issue.status,
+        });
+      }
+
+      // Overdue check
+      if (checkOverdue(updated.due_date, updated.status)) {
+        sendEmail({
+          type: "overdue",
+          issue: emailIssue,
+          ownerEmail: newOwner?.email,
+          ownerName: newOwner?.name,
+        });
+      }
+
+      onUpdate(updated);
       setEditing(false);
     }
   }
@@ -94,8 +130,8 @@ export default function IssueCard({ issue, vendors, onUpdate }: Props) {
             <PriorityBadge priority={issue.priority} />
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
-          {issue.owner && <span>{issue.owner}</span>}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+          {ownerName && <span>{ownerName}</span>}
           {issue.vendors && <span>{issue.vendors.name}</span>}
           {issue.due_date && (
             <span className={overdue ? "text-border-overdue font-medium" : ""}>
@@ -114,7 +150,7 @@ export default function IssueCard({ issue, vendors, onUpdate }: Props) {
                 <Field label="Status" value={issue.status} />
                 <Field label="Priority" value={issue.priority} />
                 <Field label="Category" value={issue.category} />
-                <Field label="Owner" value={issue.owner || "—"} />
+                <Field label="Owner" value={ownerName || "—"} />
                 <Field label="Vendor" value={issue.vendors?.name || "—"} />
                 <Field label="Due Date" value={formatDate(issue.due_date)} />
                 <Field label="Reported By" value={issue.reported_by || "—"} />
@@ -193,11 +229,20 @@ export default function IssueCard({ issue, vendors, onUpdate }: Props) {
                   </select>
                 </EditField>
                 <EditField label="Owner">
-                  <input
-                    value={draft.owner || ""}
-                    onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
+                  <select
+                    value={draft.owner_id || ""}
+                    onChange={(e) => {
+                      const empId = e.target.value || null;
+                      const emp = employees.find((em) => em.id === empId);
+                      setDraft({ ...draft, owner_id: empId, owner: emp?.name || null });
+                    }}
                     className="edit-input"
-                  />
+                  >
+                    <option value="">Unassigned</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
                 </EditField>
                 <EditField label="Vendor">
                   <select

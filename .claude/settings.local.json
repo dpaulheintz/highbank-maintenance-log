@@ -20,7 +20,11 @@
       "Bash(gh api *)",
       "Bash(node -e \"const p = require\\('next/package.json'\\); console.log\\('Next.js:', p.version\\)\")",
       "Bash(node -e \"const p = require\\('react/package.json'\\); console.log\\('React:', p.version\\)\")",
-      "Bash(git commit -m 'Downgrade to Next.js 15 for Vercel compatibility *)"
+      "Bash(git commit -m 'Downgrade to Next.js 15 for Vercel compatibility *)",
+      "Bash(git commit -m 'Fix: add all app files *)",
+      "Bash(git commit -m 'Fix ESLint config: import FlatCompat from @eslint/eslintrc *)",
+      "mcp__ac924350-6bb1-4ac2-9a75-960b61f00995__list_projects",
+      "mcp__ac924350-6bb1-4ac2-9a75-960b61f00995__execute_sql"
     ]
   }
 }

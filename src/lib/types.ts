@@ -11,6 +11,15 @@ export type Priority = "Low" | "Medium" | "High" | "Emergency";
 
 export type Status = "Open" | "In Progress" | "Awaiting Parts" | "Complete";
 
+export type VendorCategory =
+  | "Plumber"
+  | "HVAC"
+  | "Electrician"
+  | "General Contractor"
+  | "Pest Control"
+  | "Cleaning"
+  | "Other";
+
 export interface Location {
   id: string;
   name: string;
@@ -19,6 +28,20 @@ export interface Location {
 export interface Vendor {
   id: string;
   name: string;
+  category: VendorCategory | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  location: string | null;
+  email: string | null;
+  cell: string | null;
+  role: string | null;
+  created_at: string;
 }
 
 export interface Issue {
@@ -30,6 +53,7 @@ export interface Issue {
   priority: Priority;
   status: Status;
   owner: string | null;
+  owner_id: string | null;
   vendor_id: string | null;
   due_date: string | null;
   reported_by: string | null;
@@ -37,8 +61,9 @@ export interface Issue {
   completed_at: string | null;
 }
 
-export interface IssueWithVendor extends Issue {
+export interface IssueWithRelations extends Issue {
   vendors: Vendor | null;
+  employees: Employee | null;
 }
 
 export interface Comment {
