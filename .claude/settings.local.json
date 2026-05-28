@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(npm install *)",
+      "Bash(npx next *)",
+      "Bash(npm ls *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(rm -rf .next)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(python3 -c \"import sys,html; s=sys.stdin.read\\(\\); [print\\(l.strip\\(\\)\\) for l in s.split\\('>'\\) if any\\(k in l for k in ['High Bank','New Request','filter','Loading','column','dashboard']\\)]\")",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(node -e \"const p = require\\('next/package.json'\\); console.log\\('Next.js version:', p.version\\)\")",
+      "Bash(gh api *)",
+      "Bash(node -e \"const p = require\\('next/package.json'\\); console.log\\('Next.js:', p.version\\)\")",
+      "Bash(node -e \"const p = require\\('react/package.json'\\); console.log\\('React:', p.version\\)\")",
+      "Bash(git commit -m 'Downgrade to Next.js 15 for Vercel compatibility *)"
+    ]
+  }
+}
