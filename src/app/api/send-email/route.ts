@@ -2,7 +2,42 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const NOTIFY_EMAILS = (process.env.NOTIFY_EMAILS || "").split(",").filter(Boolean);
+
+// Charles Carter — CC'd on every notification
+const CHARLES = "ccarter@highbankco.com";
+
+// Location-specific manager mapping
+const LOCATION_MANAGERS: Record<string, string> = {
+  "High Bank Distillery Grandview": "kbosse@highbankco.com",
+  "High Bank Distillery Gahanna": "esparks@highbankco.com",
+  "High Bank Distillery Westerville": "lholmes@highbankco.com",
+  "High Bank PO Box 21": "ccarter@highbankco.com",
+};
+
+/**
+ * Build the recipient lists for every email:
+ *  to  = assigned owner + location manager (deduplicated)
+ *  cc  = Charles Carter (always, deduplicated from `to`)
+ */
+function buildRecipients(
+  locationName: string,
+  ownerEmail: string | null | undefined
+): { to: string[]; cc: string[] } {
+  const toSet = new Set<string>();
+
+  // 1. Assigned owner
+  if (ownerEmail) toSet.add(ownerEmail);
+
+  // 2. Location manager
+  const locManager = LOCATION_MANAGERS[locationName];
+  if (locManager) toSet.add(locManager);
+
+  // 3. Charles always on CC (remove from `to` if already there to avoid dupes)
+  const to = [...toSet];
+  const cc = to.includes(CHARLES) ? [] : [CHARLES];
+
+  return { to, cc };
+}
 
 function brandedHtml(body: string): string {
   return `
@@ -41,7 +76,9 @@ export async function POST(req: NextRequest) {
     const { type, issue, ownerEmail, ownerName, oldStatus } = await req.json();
 
     const location = issue.locationName || "Unknown Location";
-    const shortLocation = location.replace("High Bank Distillery ", "");
+    const shortLocation = location
+      .replace("High Bank Distillery ", "")
+      .replace("High Bank ", "");
     const details = issueDetailsTable({
       Title: issue.title,
       Location: shortLocation,
@@ -57,14 +94,13 @@ export async function POST(req: NextRequest) {
       ? `<p style="margin:16px 0 0;"><strong>Description:</strong></p><p style="margin:4px 0;color:#444;">${issue.description}</p>`
       : "";
 
+    const { to, cc } = buildRecipients(location, ownerEmail);
+
     let subject = "";
     let html = "";
-    let to: string[] = [];
-    let cc: string[] = [];
 
     switch (type) {
       case "new_request": {
-        to = [...NOTIFY_EMAILS];
         subject = `New Maintenance Request: ${issue.title} — ${shortLocation}`;
         html = brandedHtml(`
           <h2 style="margin:0 0 4px;color:#1C1B18;font-size:18px;">New Maintenance Request</h2>
@@ -74,8 +110,6 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "owner_assigned": {
-        to = ownerEmail ? [ownerEmail] : [];
-        cc = [...NOTIFY_EMAILS];
         subject = `You've been assigned: ${issue.title} — ${shortLocation}`;
         html = brandedHtml(`
           <h2 style="margin:0 0 4px;color:#1C1B18;font-size:18px;">You've Been Assigned an Issue</h2>
@@ -85,8 +119,6 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "status_changed": {
-        to = [...NOTIFY_EMAILS];
-        cc = ownerEmail ? [ownerEmail] : [];
         subject = `Status Update: ${issue.title} is now ${issue.status}`;
         html = brandedHtml(`
           <h2 style="margin:0 0 4px;color:#1C1B18;font-size:18px;">Status Update</h2>
@@ -99,9 +131,6 @@ export async function POST(req: NextRequest) {
         const dueDate = new Date(issue.due_date + "T00:00:00");
         const today = new Date();
         const diffDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-        to = [...NOTIFY_EMAILS];
-        if (ownerEmail) to.push(ownerEmail);
-        to = [...new Set(to)];
         subject = `Overdue: ${issue.title} — ${shortLocation}`;
         html = brandedHtml(`
           <h2 style="margin:0 0 4px;color:#C8922A;font-size:18px;">⚠ Overdue Issue</h2>
@@ -114,14 +143,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Unknown email type" }, { status: 400 });
     }
 
-    if (to.length === 0) {
+    if (to.length === 0 && cc.length === 0) {
       return NextResponse.json({ error: "No recipients" }, { status: 400 });
     }
 
+    // If `to` is empty but we have CC, move Charles to `to` (Resend requires at least one `to`)
+    const finalTo = to.length > 0 ? to : [CHARLES];
+    const finalCc = to.length > 0 && cc.length > 0 ? cc : undefined;
+
     const { data, error } = await resend.emails.send({
       from: "High Bank Maintenance <onboarding@resend.dev>",
-      to,
-      cc: cc.length > 0 ? cc : undefined,
+      to: finalTo,
+      cc: finalCc,
       subject,
       html,
     });
