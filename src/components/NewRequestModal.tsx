@@ -16,7 +16,7 @@ interface Props {
   onCreated: (issue: IssueWithRelations) => void;
 }
 
-export default function NewRequestModal({ locations, vendors, employees, onClose, onCreated }: Props) {
+export default function NewRequestModal({ locations: propLocations, vendors: propVendors, employees: propEmployees, onClose, onCreated }: Props) {
   const [locationId, setLocationId] = useState("");
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<Category>("Equipment");
@@ -29,6 +29,25 @@ export default function NewRequestModal({ locations, vendors, employees, onClose
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Fetch own data directly from Supabase — fallback to props if queries fail
+  const [locations, setLocations] = useState<Location[]>(propLocations);
+  const [vendors, setVendors] = useState<Vendor[]>(propVendors);
+  const [employees, setEmployees] = useState<Employee[]>(propEmployees);
+
+  useEffect(() => {
+    async function loadData() {
+      const [locRes, vendorRes, empRes] = await Promise.all([
+        supabase.from("locations").select("*").order("name"),
+        supabase.from("vendors").select("*").order("name"),
+        supabase.from("employees").select("*").order("name"),
+      ]);
+      if (locRes.data && locRes.data.length > 0) setLocations(locRes.data as Location[]);
+      if (vendorRes.data && vendorRes.data.length > 0) setVendors(vendorRes.data as Vendor[]);
+      if (empRes.data && empRes.data.length > 0) setEmployees(empRes.data as Employee[]);
+    }
+    loadData();
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("hb_reported_by");

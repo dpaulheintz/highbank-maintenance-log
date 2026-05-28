@@ -22,7 +22,8 @@ export default function AdminEmployees() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    supabase.from("employees").select("*").order("name").then(({ data }) => {
+    supabase.from("employees").select("*").order("name").then(({ data, error }) => {
+      if (error) console.error("employees fetch error:", error);
       if (data) setEmployees(data as Employee[]);
     });
   }, []);

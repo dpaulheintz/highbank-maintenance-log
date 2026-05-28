@@ -29,7 +29,8 @@
       "Bash(git commit -m 'Route emails by location manager with Charles always CC'\\\\''d *)",
       "Bash(git commit -m 'Fix email routing: Charles via env, Lindsay manages Westerville + PO Box 21 *)",
       "Bash(git commit -m 'Fix locations, seed employees, update vendor form *)",
-      "Bash(git commit -m 'Add error logging to dashboard data fetching *)"
+      "Bash(git commit -m 'Add error logging to dashboard data fetching *)",
+      "Bash(git commit -m 'Modal fetches locations/employees/vendors directly from Supabase *)"
     ]
   }
 }
