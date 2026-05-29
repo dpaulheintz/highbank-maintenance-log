@@ -3,25 +3,26 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// NOTIFY_EMAILS = Charles Carter — receives every notification
-const ALWAYS_NOTIFY = (process.env.NOTIFY_EMAILS || "").split(",").filter(Boolean);
+// Charles Carter — receives every notification
+const ALWAYS_NOTIFY = ["ccarter@highbankco.com"];
 
 // Location-specific manager mapping
 const LOCATION_MANAGERS: Record<string, string> = {
   "High Bank Distillery Grandview": "kbosse@highbankco.com",
   "High Bank Distillery Gahanna": "esparks@highbankco.com",
   "High Bank Distillery Westerville": "lholmes@highbankco.com",
-  "High Bank PO Box 21": "lholmes@highbankco.com",
+  "High Bank PO Box 21": "ccarter@highbankco.com",
 };
 
 /**
  * Build the recipient lists for every email:
  *  to  = assigned owner + location manager (deduplicated)
- *  cc  = NOTIFY_EMAILS / Charles Carter (always, deduplicated from `to`)
+ *  cc  = ALWAYS_NOTIFY + manager emails (deduplicated from `to`)
  */
 function buildRecipients(
   locationName: string,
-  ownerEmail: string | null | undefined
+  ownerEmail: string | null | undefined,
+  managerEmails: string[] = []
 ): { to: string[]; cc: string[] } {
   const toSet = new Set<string>();
 
@@ -32,11 +33,17 @@ function buildRecipients(
   const locManager = LOCATION_MANAGERS[locationName];
   if (locManager) toSet.add(locManager);
 
-  // 3. NOTIFY_EMAILS (Charles) always on CC, deduplicated from `to`
+  // 3. Build CC: ALWAYS_NOTIFY + job-specific managers, deduplicated from `to`
   const to = [...toSet];
-  const cc = ALWAYS_NOTIFY.filter((e) => !to.includes(e));
+  const ccSet = new Set<string>();
+  for (const email of ALWAYS_NOTIFY) {
+    if (!to.includes(email)) ccSet.add(email);
+  }
+  for (const email of managerEmails) {
+    if (!to.includes(email) && !ccSet.has(email)) ccSet.add(email);
+  }
 
-  return { to, cc };
+  return { to, cc: [...ccSet] };
 }
 
 function brandedHtml(body: string): string {
@@ -71,9 +78,22 @@ function issueDetailsTable(data: Record<string, string | null | undefined>): str
   return `<table style="width:100%;border-collapse:collapse;margin:16px 0;">${rows}</table>`;
 }
 
+function formatDateStr(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  try {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { type, issue, ownerEmail, ownerName, oldStatus } = await req.json();
+    const { type, issue, ownerEmail, ownerName, oldStatus, managerEmails, updateText, updatedBy } = await req.json();
 
     const location = issue.locationName || "Unknown Location";
     const shortLocation = location
@@ -87,14 +107,15 @@ export async function POST(req: NextRequest) {
       Status: issue.status,
       Owner: ownerName || issue.owner || null,
       Vendor: issue.vendorName || null,
-      "Due Date": issue.due_date || null,
+      "Report Date": formatDateStr(issue.report_date),
+      "Est. Repair": formatDateStr(issue.estimated_repair_date),
       "Reported By": issue.reported_by || null,
     });
     const description = issue.description
       ? `<p style="margin:16px 0 0;"><strong>Description:</strong></p><p style="margin:4px 0;color:#444;">${issue.description}</p>`
       : "";
 
-    const { to, cc } = buildRecipients(location, ownerEmail);
+    const { to, cc } = buildRecipients(location, ownerEmail, managerEmails || []);
 
     let subject = "";
     let html = "";
@@ -128,13 +149,26 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "overdue": {
-        const dueDate = new Date(issue.due_date + "T00:00:00");
+        const repairDate = new Date(issue.estimated_repair_date);
         const today = new Date();
-        const diffDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.floor((today.getTime() - repairDate.getTime()) / (1000 * 60 * 60 * 24));
         subject = `Overdue: ${issue.title} — ${shortLocation}`;
         html = brandedHtml(`
-          <h2 style="margin:0 0 4px;color:#C8922A;font-size:18px;">⚠ Overdue Issue</h2>
+          <h2 style="margin:0 0 4px;color:#C8922A;font-size:18px;">Overdue Issue</h2>
           <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">This issue is <strong style="color:#d97706;">${diffDays} day${diffDays !== 1 ? "s" : ""} overdue</strong>.</p>
+          ${details}${description}
+        `);
+        break;
+      }
+      case "job_update": {
+        subject = `Update on: ${issue.title} — ${shortLocation}`;
+        html = brandedHtml(`
+          <h2 style="margin:0 0 4px;color:#1C1B18;font-size:18px;">Job Update</h2>
+          <p style="margin:0 0 4px;color:#9e9a8f;font-size:13px;">Posted by <strong>${updatedBy || "Unknown"}</strong></p>
+          <div style="background:#f9f8f6;border-left:3px solid #C8922A;padding:12px 16px;margin:16px 0;font-size:14px;color:#1C1B18;">
+            ${updateText}
+          </div>
+          <p style="margin:8px 0;font-size:13px;color:#9e9a8f;">Current Status: <strong style="color:#1C1B18;">${issue.status}</strong></p>
           ${details}${description}
         `);
         break;
@@ -147,7 +181,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No recipients" }, { status: 400 });
     }
 
-    // Resend requires at least one `to` — fall back to NOTIFY_EMAILS if needed
+    // Resend requires at least one `to` — fall back to ALWAYS_NOTIFY if needed
     const finalTo = to.length > 0 ? to : [...ALWAYS_NOTIFY];
     const finalCc = to.length > 0 && cc.length > 0 ? cc : undefined;
 

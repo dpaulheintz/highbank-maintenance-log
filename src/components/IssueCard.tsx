@@ -7,6 +7,7 @@ import { sendEmail, buildEmailIssue, isOverdue as checkOverdue } from "@/lib/ema
 import StatusBadge from "./StatusBadge";
 import PriorityBadge from "./PriorityBadge";
 import CommentSection from "./CommentSection";
+import UpdateSection from "./UpdateSection";
 
 const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest"];
 const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Emergency"];
@@ -14,11 +15,45 @@ const STATUSES: Status[] = ["Open", "In Progress", "Awaiting Parts", "Complete"]
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+  return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatDateTime(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getStatusBorderClass(status: Status, overdue: boolean): string {
+  if (overdue) return "border-[#ef4444]";
+  switch (status) {
+    case "Complete":
+      return "border-[#22c55e]";
+    case "In Progress":
+      return "border-[#eab308]";
+    case "Awaiting Parts":
+      return "border-[#3b82f6]";
+    default:
+      return "border-border";
+  }
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 interface Props {
@@ -35,8 +70,18 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(issue);
 
-  const overdue = checkOverdue(issue.due_date, issue.status);
+  const overdue = checkOverdue(issue.estimated_repair_date, issue.status);
   const ownerName = issue.employees?.name || issue.owner || null;
+  const borderClass = getStatusBorderClass(issue.status, overdue);
+
+  // Resolve managers
+  const managers = (issue.manager_ids || [])
+    .map((id) => employees.find((emp) => emp.id === id))
+    .filter(Boolean) as Employee[];
+
+  const managerEmails = managers
+    .map((m) => m.email)
+    .filter(Boolean) as string[];
 
   async function save() {
     setSaving(true);
@@ -79,6 +124,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
           issue: emailIssue,
           ownerEmail: newOwner?.email,
           ownerName: newOwner?.name,
+          managerEmails,
         });
       }
 
@@ -90,16 +136,18 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
           ownerEmail: newOwner?.email,
           ownerName: newOwner?.name,
           oldStatus: issue.status,
+          managerEmails,
         });
       }
 
       // Overdue check
-      if (checkOverdue(updated.due_date, updated.status)) {
+      if (checkOverdue(updated.estimated_repair_date, updated.status)) {
         sendEmail({
           type: "overdue",
           issue: emailIssue,
           ownerEmail: newOwner?.email,
           ownerName: newOwner?.name,
+          managerEmails,
         });
       }
 
@@ -115,9 +163,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
 
   return (
     <div
-      className={`rounded-lg border transition-colors ${
-        overdue ? "border-border-overdue" : "border-border"
-      } bg-surface hover:bg-surface-hover`}
+      className={`rounded-lg border-2 transition-colors ${borderClass} bg-surface hover:bg-surface-hover`}
     >
       <button
         onClick={() => setExpanded(!expanded)}
@@ -133,13 +179,30 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
           {ownerName && <span>{ownerName}</span>}
           {issue.vendors && <span>{issue.vendors.name}</span>}
-          {issue.due_date && (
-            <span className={overdue ? "text-border-overdue font-medium" : ""}>
-              Due {formatDate(issue.due_date)}
+          {issue.estimated_repair_date && (
+            <span className={`font-medium ${overdue ? "text-[#ef4444]" : "text-accent"}`}>
+              Est. Repair: {formatDateTime(issue.estimated_repair_date)}
             </span>
+          )}
+          {issue.report_date && (
+            <span>Reported: {formatDate(issue.report_date)}</span>
           )}
           <span className="opacity-60">{issue.category}</span>
         </div>
+        {/* Manager avatars */}
+        {managers.length > 0 && (
+          <div className="flex gap-1 mt-2">
+            {managers.map((mgr) => (
+              <span
+                key={mgr.id}
+                className="w-5 h-5 rounded-full bg-accent/20 text-accent text-[9px] font-bold flex items-center justify-center"
+                title={mgr.name}
+              >
+                {getInitials(mgr.name)}
+              </span>
+            ))}
+          </div>
+        )}
       </button>
 
       {expanded && (
@@ -152,7 +215,8 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 <Field label="Category" value={issue.category} />
                 <Field label="Owner" value={ownerName || "—"} />
                 <Field label="Vendor" value={issue.vendors?.name || "—"} />
-                <Field label="Due Date" value={formatDate(issue.due_date)} />
+                <Field label="Report Date" value={formatDate(issue.report_date)} />
+                <Field label="Est. Repair" value={formatDateTime(issue.estimated_repair_date)} highlight={overdue} />
                 <Field label="Reported By" value={issue.reported_by || "—"} />
                 <Field
                   label="Created"
@@ -162,6 +226,9 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                     year: "numeric",
                   })}
                 />
+                {managers.length > 0 && (
+                  <Field label="Managers" value={managers.map((m) => m.name).join(", ")} />
+                )}
               </div>
               {issue.description && (
                 <div>
@@ -169,12 +236,35 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                   <p className="text-sm text-text whitespace-pre-wrap">{issue.description}</p>
                 </div>
               )}
+
+              {/* Photo gallery */}
+              {issue.photo_urls && issue.photo_urls.length > 0 && (
+                <div>
+                  <p className="text-xs text-text-muted mb-2">Photos</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {issue.photo_urls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={url}
+                          alt={`Issue photo ${i + 1}`}
+                          className="w-20 h-20 object-cover rounded border border-border hover:border-accent transition-colors"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => { setDraft(issue); setEditing(true); }}
                 className="text-xs text-accent hover:text-accent-hover font-medium cursor-pointer"
               >
                 Edit Issue
               </button>
+
+              {/* Updates section */}
+              <UpdateSection issue={issue} employees={employees} locationName={locationName} />
+
               <CommentSection issueId={issue.id} />
             </>
           ) : (
@@ -271,7 +361,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                   disabled={saving}
                   className="px-3 py-1.5 bg-accent text-bg text-xs font-medium rounded hover:bg-accent-hover disabled:opacity-50 cursor-pointer"
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving..." : "Save"}
                 </button>
                 <button
                   onClick={cancel}
@@ -288,11 +378,11 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div>
       <p className="text-xs text-text-muted">{label}</p>
-      <p className="text-sm text-text">{value}</p>
+      <p className={`text-sm ${highlight ? "text-[#ef4444] font-medium" : "text-text"}`}>{value}</p>
     </div>
   );
 }

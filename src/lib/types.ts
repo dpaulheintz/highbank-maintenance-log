@@ -57,6 +57,10 @@ export interface Issue {
   owner_id: string | null;
   vendor_id: string | null;
   due_date: string | null;
+  report_date: string | null;
+  estimated_repair_date: string | null;
+  manager_ids: string[];
+  photo_urls: string[];
   reported_by: string | null;
   created_at: string;
   completed_at: string | null;
@@ -72,5 +76,6 @@ export interface Comment {
   issue_id: string;
   author: string;
   body: string;
+  is_update: boolean;
   created_at: string;
 }

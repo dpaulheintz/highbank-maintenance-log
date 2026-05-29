@@ -17,6 +17,7 @@ export default function CommentSection({ issueId }: { issueId: string }) {
       .from("comments")
       .select("*")
       .eq("issue_id", issueId)
+      .eq("is_update", false)
       .order("created_at", { ascending: true })
       .then(({ data }) => {
         if (data) setComments(data as Comment[]);

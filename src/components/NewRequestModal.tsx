@@ -1,12 +1,37 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { sendEmail, buildEmailIssue, isOverdue } from "@/lib/email";
+import { sendEmail, buildEmailIssue } from "@/lib/email";
 import type { Location, Vendor, Employee, Category, Priority, IssueWithRelations } from "@/lib/types";
 
 const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest"];
 const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Emergency"];
+
+function calcEstimatedRepairDate(priority: Priority): Date {
+  const now = new Date();
+  switch (priority) {
+    case "Emergency":
+      return now;
+    case "High":
+      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    case "Medium":
+      return new Date(now.getTime() + 72 * 60 * 60 * 1000);
+    case "Low":
+      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  }
+}
+
+function formatReadableDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 interface Props {
   locations: Location[];
@@ -24,16 +49,20 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
   const [description, setDescription] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [vendorId, setVendorId] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [reportedBy, setReportedBy] = useState("");
+  const [managerIds, setManagerIds] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const overlayRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch own data directly from Supabase — fallback to props if queries fail
   const [locations, setLocations] = useState<Location[]>(propLocations);
   const [vendors, setVendors] = useState<Vendor[]>(propVendors);
   const [employees, setEmployees] = useState<Employee[]>(propEmployees);
+
+  const estimatedRepairDate = useMemo(() => calcEstimatedRepairDate(priority), [priority]);
 
   useEffect(() => {
     async function loadData() {
@@ -62,10 +91,29 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  async function uploadPhotos(): Promise<string[]> {
+    const urls: string[] = [];
+    for (const file of photos) {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("issue-photos")
+        .upload(path, file);
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage
+          .from("issue-photos")
+          .getPublicUrl(path);
+        urls.push(urlData.publicUrl);
+      }
+    }
+    return urls;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) { setError("Title is required"); return; }
     if (!locationId) { setError("Please select a location"); return; }
+    if (!ownerId) { setError("Please select an owner"); return; }
 
     setSubmitting(true);
     setError("");
@@ -74,7 +122,11 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
       localStorage.setItem("hb_reported_by", reportedBy.trim());
     }
 
+    // Upload photos
+    const photoUrls = await uploadPhotos();
+
     const selectedOwner = employees.find((emp) => emp.id === ownerId);
+    const repairDateIso = estimatedRepairDate.toISOString();
 
     const { data, error: dbError } = await supabase
       .from("issues")
@@ -88,7 +140,10 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
         owner: selectedOwner?.name || null,
         owner_id: ownerId || null,
         vendor_id: vendorId || null,
-        due_date: dueDate || null,
+        report_date: reportDate || null,
+        estimated_repair_date: repairDateIso,
+        manager_ids: managerIds,
+        photo_urls: photoUrls,
         reported_by: reportedBy.trim() || null,
         completed_at: null,
       })
@@ -104,26 +159,22 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
       const vendorName = created.vendors?.name || null;
       const emailIssue = buildEmailIssue(created, loc?.name || "", vendorName);
 
-      // Trigger 1: New request
-      sendEmail({ type: "new_request", issue: emailIssue, ownerName: selectedOwner?.name });
+      // Resolve manager emails
+      const mgrEmails = managerIds
+        .map((id) => employees.find((emp) => emp.id === id)?.email)
+        .filter(Boolean) as string[];
 
-      // Trigger 2: Owner assigned
+      // Trigger: New request
+      sendEmail({ type: "new_request", issue: emailIssue, ownerName: selectedOwner?.name, ownerEmail: selectedOwner?.email, managerEmails: mgrEmails });
+
+      // Trigger: Owner assigned
       if (selectedOwner) {
         sendEmail({
           type: "owner_assigned",
           issue: emailIssue,
           ownerEmail: selectedOwner.email,
           ownerName: selectedOwner.name,
-        });
-      }
-
-      // Trigger 4: Overdue check
-      if (isOverdue(dueDate || null, "Open")) {
-        sendEmail({
-          type: "overdue",
-          issue: emailIssue,
-          ownerEmail: selectedOwner?.email,
-          ownerName: selectedOwner?.name,
+          managerEmails: mgrEmails,
         });
       }
 
@@ -133,6 +184,18 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
 
   function shortName(name: string): string {
     return name.replace("High Bank Distillery ", "").replace("High Bank ", "");
+  }
+
+  function toggleManager(empId: string) {
+    setManagerIds((prev) =>
+      prev.includes(empId) ? prev.filter((id) => id !== empId) : [...prev, empId]
+    );
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) {
+      setPhotos(Array.from(e.target.files));
+    }
   }
 
   return (
@@ -154,7 +217,7 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
 
           <FormField label="Location" required>
             <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="form-input">
-              <option value="">Select location…</option>
+              <option value="">Select location...</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>{shortName(l.name)}</option>
               ))}
@@ -178,14 +241,43 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
             </FormField>
           </div>
 
+          {/* Estimated repair date display */}
+          <div className="text-xs px-1">
+            <span className="text-text-muted">Est. Repair: </span>
+            <span className="text-accent font-medium">{formatReadableDate(estimatedRepairDate)}</span>
+          </div>
+
           <FormField label="Description">
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Describe the issue in detail…" className="form-input resize-none" />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Describe the issue in detail..." className="form-input resize-none" />
+          </FormField>
+
+          {/* Photo upload */}
+          <FormField label="Photos">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="form-input cursor-pointer flex items-center gap-2 text-text-muted hover:border-accent transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm">
+                {photos.length > 0 ? `${photos.length} photo${photos.length > 1 ? "s" : ""} selected` : "Click to add photos..."}
+              </span>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotoChange}
+              className="hidden"
+            />
           </FormField>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Owner">
+            <FormField label="Owner" required>
               <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="form-input">
-                <option value="">Unassigned</option>
+                <option value="">Select owner...</option>
                 {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
               </select>
             </FormField>
@@ -197,9 +289,27 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
             </FormField>
           </div>
 
+          {/* Managers multi-select */}
+          <FormField label="Additional Managers (optional)">
+            <div className="form-input max-h-32 overflow-y-auto space-y-1 !p-2">
+              {employees.map((emp) => (
+                <label key={emp.id} className="flex items-center gap-2 cursor-pointer px-1 py-0.5 rounded hover:bg-surface-hover">
+                  <input
+                    type="checkbox"
+                    checked={managerIds.includes(emp.id)}
+                    onChange={() => toggleManager(emp.id)}
+                    className="accent-accent w-3.5 h-3.5"
+                  />
+                  <span className="text-sm text-text">{emp.name}</span>
+                  {emp.role && <span className="text-xs text-text-muted">({emp.role})</span>}
+                </label>
+              ))}
+            </div>
+          </FormField>
+
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Due Date">
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="form-input" />
+            <FormField label="Report Date">
+              <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="form-input" />
             </FormField>
             <FormField label="Reported By">
               <input value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} placeholder="Your name" className="form-input" />
@@ -211,7 +321,7 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
               Cancel
             </button>
             <button type="submit" disabled={submitting} className="px-5 py-2 bg-accent text-bg text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50 cursor-pointer">
-              {submitting ? "Submitting…" : "Submit Request"}
+              {submitting ? "Submitting..." : "Submit Request"}
             </button>
           </div>
         </form>
