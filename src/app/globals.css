@@ -34,6 +34,7 @@
 }
 
 * {
+  font-family: 'Calibri', 'Calibri Regular', sans-serif;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
 }

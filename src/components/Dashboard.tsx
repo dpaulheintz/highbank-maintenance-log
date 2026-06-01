@@ -103,7 +103,7 @@ export default function Dashboard() {
 
       <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur-md border-b border-border">
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="pl-12 flex items-center gap-3">
+          <div className="pl-12 flex items-center gap-4">
             <Image
               src="/logos/HBCo-White.png"
               alt="High Bank Co."
@@ -112,7 +112,7 @@ export default function Dashboard() {
               className="h-auto"
               priority
             />
-            <p className="text-xs text-text-muted tracking-widest uppercase mt-0.5 hidden sm:block">
+            <p className="text-sm sm:text-base text-text-muted tracking-[0.25em] uppercase hidden sm:block" style={{ fontFamily: "'Calibri', sans-serif" }}>
               Maintenance &amp; Repair Log
             </p>
           </div>
@@ -139,8 +139,8 @@ export default function Dashboard() {
                 key={location.id}
                 className={`flex flex-col min-w-0 ${!isLast ? "border-r border-border" : ""}`}
               >
-                <div className="flex items-center justify-between mb-3 px-3 py-2.5 bg-[#1F1E1A] border-b-2 border-accent rounded-t-lg">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col items-center mb-3 px-3 py-3 bg-[#1F1E1A] border-b-2 border-accent rounded-t-lg relative">
+                  <div className="flex items-center gap-2 justify-center">
                     <Image
                       src="/logos/HB_Distillery_Round.png"
                       alt=""
@@ -148,11 +148,11 @@ export default function Dashboard() {
                       height={28}
                       className="opacity-40"
                     />
-                    <h2 className="font-display text-base text-text">
+                    <h2 className="font-bold uppercase text-accent tracking-wide" style={{ fontSize: '22px' }}>
                       {shortName(location.name)}
                     </h2>
                   </div>
-                  <span className="text-xs text-text-muted bg-surface px-2 py-0.5 rounded-full">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted bg-surface px-2 py-0.5 rounded-full">
                     {locIssues.length}
                   </span>
                 </div>
