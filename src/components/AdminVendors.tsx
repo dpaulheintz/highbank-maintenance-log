@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import type { Vendor, VendorCategory } from "@/lib/types";
 
 const VENDOR_CATEGORIES: VendorCategory[] = [
-  "Plumber", "HVAC", "Electrician", "General Contractor", "Pest Control", "Cleaning", "Other",
+  "Plumbing", "HVAC", "Facility Solutions & Equipment", "Internet / Cable", "Waste and Refuse", "General Repair",
 ];
 
 const emptyVendor = { name: "", contact: "", category: "" as VendorCategory, phone: "", email: "", notes: "" };

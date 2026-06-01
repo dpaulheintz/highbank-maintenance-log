@@ -7,6 +7,7 @@ import IssueCard from "./IssueCard";
 import FilterBar from "./FilterBar";
 import NewRequestModal from "./NewRequestModal";
 import Sidebar from "./Sidebar";
+import Image from "next/image";
 
 const LOCATION_ORDER = ["Grandview", "Gahanna", "Westerville", "PO Box 21"];
 
@@ -32,6 +33,7 @@ export default function Dashboard() {
     category: "",
     priority: "",
     showCompleted: false,
+    showArchived: false,
   });
 
   const fetchData = useCallback(async () => {
@@ -73,7 +75,9 @@ export default function Dashboard() {
   function filteredIssues(locationId: string): IssueWithRelations[] {
     return issues.filter((issue) => {
       if (issue.location_id !== locationId) return false;
-      if (!filters.showCompleted && issue.status === "Complete") return false;
+      if (!filters.showArchived && issue.archived) return false;
+      if (filters.showArchived && !issue.archived) return false;
+      if (!filters.showCompleted && !filters.showArchived && issue.status === "Complete") return false;
       if (filters.status && issue.status !== filters.status) return false;
       if (filters.category && issue.category !== filters.category) return false;
       if (filters.priority && issue.priority !== filters.priority) return false;
@@ -99,11 +103,16 @@ export default function Dashboard() {
 
       <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur-md border-b border-border">
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="pl-12">
-            <h1 className="font-display text-xl sm:text-2xl text-text tracking-tight">
-              High Bank Distillery
-            </h1>
-            <p className="text-xs text-text-muted tracking-widest uppercase mt-0.5">
+          <div className="pl-12 flex items-center gap-3">
+            <Image
+              src="/logos/HBCo-White.png"
+              alt="High Bank Co."
+              width={120}
+              height={40}
+              className="h-auto"
+              priority
+            />
+            <p className="text-xs text-text-muted tracking-widest uppercase mt-0.5 hidden sm:block">
               Maintenance &amp; Repair Log
             </p>
           </div>
@@ -121,20 +130,33 @@ export default function Dashboard() {
       </div>
 
       <main className="flex-1 max-w-[1800px] mx-auto w-full px-4 sm:px-6 pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          {locations.map((location) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0">
+          {locations.map((location, idx) => {
             const locIssues = filteredIssues(location.id);
+            const isLast = idx === locations.length - 1;
             return (
-              <div key={location.id} className="flex flex-col min-w-0">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-display text-base text-text">
-                    {shortName(location.name)}
-                  </h2>
+              <div
+                key={location.id}
+                className={`flex flex-col min-w-0 ${!isLast ? "border-r border-border" : ""}`}
+              >
+                <div className="flex items-center justify-between mb-3 px-3 py-2.5 bg-[#1F1E1A] border-b-2 border-accent rounded-t-lg">
+                  <div className="flex items-center gap-2">
+                    <Image
+                      src="/logos/HB_Distillery_Round.png"
+                      alt=""
+                      width={28}
+                      height={28}
+                      className="opacity-40"
+                    />
+                    <h2 className="font-display text-base text-text">
+                      {shortName(location.name)}
+                    </h2>
+                  </div>
                   <span className="text-xs text-text-muted bg-surface px-2 py-0.5 rounded-full">
                     {locIssues.length}
                   </span>
                 </div>
-                <div className="space-y-3 flex-1">
+                <div className="space-y-3 flex-1 px-2.5 column-bg">
                   {locIssues.length === 0 ? (
                     <p className="text-sm text-text-muted text-center py-8 opacity-60">
                       No issues

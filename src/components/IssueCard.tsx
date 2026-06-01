@@ -69,12 +69,12 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(issue);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
 
   const overdue = checkOverdue(issue.estimated_repair_date, issue.status);
   const ownerName = issue.employees?.name || issue.owner || null;
   const borderClass = getStatusBorderClass(issue.status, overdue);
 
-  // Resolve managers
   const managers = (issue.manager_ids || [])
     .map((id) => employees.find((emp) => emp.id === id))
     .filter(Boolean) as Employee[];
@@ -92,6 +92,11 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
           ? null
           : issue.completed_at;
 
+    const completionDate =
+      draft.status === "Complete" && issue.status !== "Complete" && !draft.completion_date
+        ? new Date().toISOString().split("T")[0]
+        : draft.completion_date;
+
     const { data, error } = await supabase
       .from("issues")
       .update({
@@ -105,6 +110,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
         vendor_id: draft.vendor_id,
         due_date: draft.due_date,
         completed_at: completedAt,
+        completion_date: completionDate,
       })
       .eq("id", issue.id)
       .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
@@ -117,7 +123,6 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
       const newOwner = employees.find((e) => e.id === updated.owner_id);
       const emailIssue = buildEmailIssue(updated, locationName, vendorName);
 
-      // Owner changed
       if (draft.owner_id && draft.owner_id !== issue.owner_id) {
         sendEmail({
           type: "owner_assigned",
@@ -128,7 +133,6 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
         });
       }
 
-      // Status changed
       if (draft.status !== issue.status) {
         sendEmail({
           type: "status_changed",
@@ -140,7 +144,6 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
         });
       }
 
-      // Overdue check
       if (checkOverdue(updated.estimated_repair_date, updated.status)) {
         sendEmail({
           type: "overdue",
@@ -161,16 +164,40 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
     setEditing(false);
   }
 
+  async function toggleArchive() {
+    const newVal = !issue.archived;
+    const { data, error } = await supabase
+      .from("issues")
+      .update({ archived: newVal })
+      .eq("id", issue.id)
+      .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
+      .single();
+
+    if (!error && data) {
+      onUpdate(data as IssueWithRelations);
+      setArchiveConfirm(false);
+    }
+  }
+
+  const isArchived = issue.archived;
+
   return (
     <div
-      className={`rounded-lg border-2 transition-colors ${borderClass} bg-surface hover:bg-surface-hover`}
+      className={`rounded-xl border-2 transition-colors ${borderClass} bg-surface hover:bg-surface-hover shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)] ${isArchived ? "opacity-50" : ""}`}
     >
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full text-left p-4 cursor-pointer"
       >
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-medium text-sm leading-tight text-text">{issue.title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-sm leading-tight text-text">{issue.title}</h3>
+            {isArchived && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-border/50 text-text-muted px-1.5 py-0.5 rounded">
+                Archived
+              </span>
+            )}
+          </div>
           <div className="flex gap-1.5 shrink-0">
             <StatusBadge status={issue.status} />
             <PriorityBadge priority={issue.priority} />
@@ -179,6 +206,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
           {ownerName && <span>{ownerName}</span>}
           {issue.vendors && <span>{issue.vendors.name}</span>}
+          {issue.vendor_name_custom && <span>{issue.vendor_name_custom}</span>}
           {issue.estimated_repair_date && (
             <span className={`font-medium ${overdue ? "text-[#ef4444]" : "text-accent"}`}>
               Est. Repair: {formatDateTime(issue.estimated_repair_date)}
@@ -187,9 +215,13 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
           {issue.report_date && (
             <span>Reported: {formatDate(issue.report_date)}</span>
           )}
+          {issue.completion_date && (
+            <span className="text-[#22c55e] font-medium">
+              Completed: {formatDate(issue.completion_date)}
+            </span>
+          )}
           <span className="opacity-60">{issue.category}</span>
         </div>
-        {/* Manager avatars */}
         {managers.length > 0 && (
           <div className="flex gap-1 mt-2">
             {managers.map((mgr) => (
@@ -214,7 +246,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 <Field label="Priority" value={issue.priority} />
                 <Field label="Category" value={issue.category} />
                 <Field label="Owner" value={ownerName || "—"} />
-                <Field label="Vendor" value={issue.vendors?.name || "—"} />
+                <Field label="Vendor" value={issue.vendors?.name || issue.vendor_name_custom || "—"} />
                 <Field label="Report Date" value={formatDate(issue.report_date)} />
                 <Field label="Est. Repair" value={formatDateTime(issue.estimated_repair_date)} highlight={overdue} />
                 <Field label="Reported By" value={issue.reported_by || "—"} />
@@ -226,6 +258,12 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                     year: "numeric",
                   })}
                 />
+                {issue.completion_date && (
+                  <div>
+                    <p className="text-xs text-text-muted">Completion Date</p>
+                    <p className="text-sm text-[#22c55e] font-medium">{formatDate(issue.completion_date)}</p>
+                  </div>
+                )}
                 {managers.length > 0 && (
                   <Field label="Managers" value={managers.map((m) => m.name).join(", ")} />
                 )}
@@ -237,7 +275,6 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 </div>
               )}
 
-              {/* Photo gallery */}
               {issue.photo_urls && issue.photo_urls.length > 0 && (
                 <div>
                   <p className="text-xs text-text-muted mb-2">Photos</p>
@@ -255,16 +292,50 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 </div>
               )}
 
-              <button
-                onClick={() => { setDraft(issue); setEditing(true); }}
-                className="text-xs text-accent hover:text-accent-hover font-medium cursor-pointer"
-              >
-                Edit Issue
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { setDraft(issue); setEditing(true); }}
+                  className="text-xs text-accent hover:text-accent-hover font-medium cursor-pointer"
+                >
+                  Edit Issue
+                </button>
 
-              {/* Updates section */}
+                {!isArchived ? (
+                  !archiveConfirm ? (
+                    <button
+                      onClick={() => setArchiveConfirm(true)}
+                      className="text-xs text-text-muted hover:text-[#ef4444] font-medium cursor-pointer"
+                    >
+                      Archive
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-text-muted">Archive this job? It will be hidden from the dashboard but not deleted.</span>
+                      <button
+                        onClick={toggleArchive}
+                        className="text-xs text-[#ef4444] font-medium cursor-pointer"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setArchiveConfirm(false)}
+                        className="text-xs text-text-muted cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <button
+                    onClick={toggleArchive}
+                    className="text-xs text-accent hover:text-accent-hover font-medium cursor-pointer"
+                  >
+                    Unarchive
+                  </button>
+                )}
+              </div>
+
               <UpdateSection issue={issue} employees={employees} locationName={locationName} />
-
               <CommentSection issueId={issue.id} />
             </>
           ) : (
@@ -288,7 +359,14 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 <EditField label="Status">
                   <select
                     value={draft.status}
-                    onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as Status;
+                      const updates: Partial<typeof draft> = { status: newStatus };
+                      if (newStatus === "Complete" && issue.status !== "Complete" && !draft.completion_date) {
+                        updates.completion_date = new Date().toISOString().split("T")[0];
+                      }
+                      setDraft({ ...draft, ...updates });
+                    }}
                     className="edit-input"
                   >
                     {STATUSES.map((s) => (
@@ -351,6 +429,14 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                     type="date"
                     value={draft.due_date || ""}
                     onChange={(e) => setDraft({ ...draft, due_date: e.target.value || null })}
+                    className="edit-input"
+                  />
+                </EditField>
+                <EditField label="Completion Date">
+                  <input
+                    type="date"
+                    value={draft.completion_date || ""}
+                    onChange={(e) => setDraft({ ...draft, completion_date: e.target.value || null })}
                     className="edit-input"
                   />
                 </EditField>

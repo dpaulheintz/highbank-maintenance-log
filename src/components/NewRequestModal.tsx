@@ -3,10 +3,21 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { sendEmail, buildEmailIssue } from "@/lib/email";
-import type { Location, Vendor, Employee, Category, Priority, IssueWithRelations } from "@/lib/types";
+import type { Location, Vendor, Employee, Category, Priority, IssueWithRelations, VendorCategory } from "@/lib/types";
 
 const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest"];
 const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Emergency"];
+
+const VENDOR_CATEGORIES: VendorCategory[] = [
+  "Plumbing",
+  "HVAC",
+  "Facility Solutions & Equipment",
+  "Internet / Cable",
+  "Waste and Refuse",
+  "General Repair",
+];
+
+const WRITE_IN_CATEGORIES: VendorCategory[] = ["HVAC", "Facility Solutions & Equipment", "General Repair"];
 
 function calcEstimatedRepairDate(priority: Priority): Date {
   const now = new Date();
@@ -48,7 +59,10 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
   const [priority, setPriority] = useState<Priority>("Medium");
   const [description, setDescription] = useState("");
   const [ownerId, setOwnerId] = useState("");
+  const [vendorCategory, setVendorCategory] = useState<VendorCategory | "">("");
   const [vendorId, setVendorId] = useState("");
+  const [vendorCustom, setVendorCustom] = useState("");
+  const [isWriteIn, setIsWriteIn] = useState(false);
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [reportedBy, setReportedBy] = useState("");
   const [managerIds, setManagerIds] = useState<string[]>([]);
@@ -63,6 +77,13 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
   const [employees, setEmployees] = useState<Employee[]>(propEmployees);
 
   const estimatedRepairDate = useMemo(() => calcEstimatedRepairDate(priority), [priority]);
+
+  const filteredVendors = useMemo(() => {
+    if (!vendorCategory) return [];
+    return vendors.filter((v) => v.category === vendorCategory && v.name !== "Write-in");
+  }, [vendors, vendorCategory]);
+
+  const showWriteInOption = vendorCategory ? WRITE_IN_CATEGORIES.includes(vendorCategory) : false;
 
   useEffect(() => {
     async function loadData() {
@@ -122,7 +143,6 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
       localStorage.setItem("hb_reported_by", reportedBy.trim());
     }
 
-    // Upload photos
     const photoUrls = await uploadPhotos();
 
     const selectedOwner = employees.find((emp) => emp.id === ownerId);
@@ -139,7 +159,8 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
         status: "Open" as const,
         owner: selectedOwner?.name || null,
         owner_id: ownerId || null,
-        vendor_id: vendorId || null,
+        vendor_id: isWriteIn ? null : (vendorId || null),
+        vendor_name_custom: isWriteIn ? vendorCustom.trim() || null : null,
         report_date: reportDate || null,
         estimated_repair_date: repairDateIso,
         manager_ids: managerIds,
@@ -159,15 +180,12 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
       const vendorName = created.vendors?.name || null;
       const emailIssue = buildEmailIssue(created, loc?.name || "", vendorName);
 
-      // Resolve manager emails
       const mgrEmails = managerIds
         .map((id) => employees.find((emp) => emp.id === id)?.email)
         .filter(Boolean) as string[];
 
-      // Trigger: New request
       sendEmail({ type: "new_request", issue: emailIssue, ownerName: selectedOwner?.name, ownerEmail: selectedOwner?.email, managerEmails: mgrEmails });
 
-      // Trigger: Owner assigned
       if (selectedOwner) {
         sendEmail({
           type: "owner_assigned",
@@ -241,7 +259,6 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
             </FormField>
           </div>
 
-          {/* Estimated repair date display */}
           <div className="text-xs px-1">
             <span className="text-text-muted">Est. Repair: </span>
             <span className="text-accent font-medium">{formatReadableDate(estimatedRepairDate)}</span>
@@ -251,7 +268,6 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Describe the issue in detail..." className="form-input resize-none" />
           </FormField>
 
-          {/* Photo upload */}
           <FormField label="Photos">
             <div
               onClick={() => fileInputRef.current?.click()}
@@ -274,22 +290,71 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
             />
           </FormField>
 
+          <FormField label="Owner" required>
+            <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="form-input">
+              <option value="">Select owner...</option>
+              {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+            </select>
+          </FormField>
+
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Owner" required>
-              <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="form-input">
-                <option value="">Select owner...</option>
-                {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+            <FormField label="Vendor Category">
+              <select
+                value={vendorCategory}
+                onChange={(e) => {
+                  setVendorCategory(e.target.value as VendorCategory | "");
+                  setVendorId("");
+                  setIsWriteIn(false);
+                  setVendorCustom("");
+                }}
+                className="form-input"
+              >
+                <option value="">Select category...</option>
+                {VENDOR_CATEGORIES.map((vc) => (
+                  <option key={vc} value={vc}>{vc}</option>
+                ))}
               </select>
             </FormField>
             <FormField label="Vendor">
-              <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="form-input">
-                <option value="">None</option>
-                {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              <select
+                value={isWriteIn ? "__write_in__" : vendorId}
+                onChange={(e) => {
+                  if (e.target.value === "__write_in__") {
+                    setIsWriteIn(true);
+                    setVendorId("");
+                  } else {
+                    setIsWriteIn(false);
+                    setVendorCustom("");
+                    setVendorId(e.target.value);
+                  }
+                }}
+                className="form-input"
+                disabled={!vendorCategory}
+              >
+                <option value="">
+                  {vendorCategory ? "Select vendor..." : "Pick category first"}
+                </option>
+                {filteredVendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+                {showWriteInOption && (
+                  <option value="__write_in__">Other — write in</option>
+                )}
               </select>
             </FormField>
           </div>
 
-          {/* Managers multi-select */}
+          {isWriteIn && (
+            <FormField label="Custom Vendor Name">
+              <input
+                value={vendorCustom}
+                onChange={(e) => setVendorCustom(e.target.value)}
+                placeholder="Enter vendor name..."
+                className="form-input"
+              />
+            </FormField>
+          )}
+
           <FormField label="Additional Managers (optional)">
             <div className="form-input max-h-32 overflow-y-auto space-y-1 !p-2">
               {employees.map((emp) => (

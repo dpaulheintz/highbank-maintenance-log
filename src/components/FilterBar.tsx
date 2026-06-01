@@ -11,6 +11,7 @@ interface Filters {
   category: string;
   priority: string;
   showCompleted: boolean;
+  showArchived: boolean;
 }
 
 interface Props {
@@ -47,6 +48,15 @@ export default function FilterBar({ filters, onChange }: Props) {
           className="accent-accent w-3.5 h-3.5"
         />
         Show completed
+      </label>
+      <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer select-none ml-2 opacity-70 hover:opacity-100 transition-opacity">
+        <input
+          type="checkbox"
+          checked={filters.showArchived}
+          onChange={(e) => onChange({ ...filters, showArchived: e.target.checked })}
+          className="accent-accent w-3.5 h-3.5"
+        />
+        Archived Jobs
       </label>
     </div>
   );

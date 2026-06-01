@@ -12,13 +12,12 @@ export type Priority = "Low" | "Medium" | "High" | "Emergency";
 export type Status = "Open" | "In Progress" | "Awaiting Parts" | "Complete";
 
 export type VendorCategory =
-  | "Plumber"
+  | "Plumbing"
   | "HVAC"
-  | "Electrician"
-  | "General Contractor"
-  | "Pest Control"
-  | "Cleaning"
-  | "Other";
+  | "Facility Solutions & Equipment"
+  | "Internet / Cable"
+  | "Waste and Refuse"
+  | "General Repair";
 
 export interface Location {
   id: string;
@@ -64,6 +63,9 @@ export interface Issue {
   reported_by: string | null;
   created_at: string;
   completed_at: string | null;
+  archived: boolean;
+  completion_date: string | null;
+  vendor_name_custom: string | null;
 }
 
 export interface IssueWithRelations extends Issue {
