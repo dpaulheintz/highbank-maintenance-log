@@ -6,6 +6,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // Charles Carter — receives every notification
 const ALWAYS_NOTIFY = ["ccarter@highbankco.com"];
 
+// Maintenance inbox — receives every new request
+const NEW_REQUEST_NOTIFY = ["maintenance@highbankco.com"];
+
 // Location-specific manager mapping
 const LOCATION_MANAGERS: Record<string, string> = {
   "Grandview": "kbosse@highbankco.com",
@@ -117,13 +120,30 @@ export async function POST(req: NextRequest) {
 
     const { to, cc } = buildRecipients(location, ownerEmail, managerEmails || []);
 
+    // For new requests, ensure maintenance@highbankco.com is included
+    const isNewRequest = type === "new_request";
+    if (isNewRequest) {
+      for (const email of NEW_REQUEST_NOTIFY) {
+        if (!to.includes(email) && !cc.includes(email)) {
+          cc.push(email);
+        }
+      }
+    }
+
+    const isUrgent = issue.priority === "Emergency" || issue.priority === "High";
+    const urgentPrefix = isUrgent ? "URGENT: " : "";
+    const urgentBanner = isUrgent
+      ? `<div style="background:#ef4444;color:#ffffff;padding:12px 32px;font-size:16px;font-weight:bold;text-align:center;letter-spacing:1px;">URGENT</div>`
+      : "";
+
     let subject = "";
     let html = "";
 
     switch (type) {
       case "new_request": {
-        subject = `New Maintenance Request: ${issue.title} — ${shortLocation}`;
+        subject = `${urgentPrefix}New Maintenance Request: ${issue.title} — ${shortLocation}`;
         html = brandedHtml(`
+          ${urgentBanner}
           <h2 style="margin:0 0 4px;color:#1C1B18;font-size:18px;">New Maintenance Request</h2>
           <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">A new issue has been submitted.</p>
           ${details}${description}
