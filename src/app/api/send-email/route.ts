@@ -8,10 +8,10 @@ const ALWAYS_NOTIFY = ["ccarter@highbankco.com"];
 
 // Location-specific manager mapping
 const LOCATION_MANAGERS: Record<string, string> = {
-  "High Bank Distillery Grandview": "kbosse@highbankco.com",
-  "High Bank Distillery Gahanna": "esparks@highbankco.com",
-  "High Bank Distillery Westerville": "lholmes@highbankco.com",
-  "High Bank PO Box 21": "ccarter@highbankco.com",
+  "Grandview": "kbosse@highbankco.com",
+  "Gahanna": "esparks@highbankco.com",
+  "Westerville/PO Box": "lholmes@highbankco.com",
+  "Distillery": "ccarter@highbankco.com",
 };
 
 /**

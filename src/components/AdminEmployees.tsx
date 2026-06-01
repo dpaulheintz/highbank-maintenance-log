@@ -5,10 +5,10 @@ import { supabase } from "@/lib/supabase";
 import type { Employee } from "@/lib/types";
 
 const LOCATIONS = [
-  "High Bank Distillery Grandview",
-  "High Bank Distillery Gahanna",
-  "High Bank Distillery Westerville",
-  "High Bank PO Box 21",
+  "Grandview",
+  "Gahanna",
+  "Westerville/PO Box",
+  "Distillery",
   "All Locations",
 ];
 

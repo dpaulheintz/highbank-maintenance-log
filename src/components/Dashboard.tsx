@@ -9,7 +9,7 @@ import NewRequestModal from "./NewRequestModal";
 import Sidebar from "./Sidebar";
 import Image from "next/image";
 
-const LOCATION_ORDER = ["Grandview", "Gahanna", "Westerville", "PO Box 21"];
+const LOCATION_ORDER = ["Grandview", "Gahanna", "Westerville/PO Box", "Distillery"];
 
 function locationSort(a: Location, b: Location): number {
   const ai = LOCATION_ORDER.findIndex((n) => a.name.includes(n));
@@ -18,7 +18,9 @@ function locationSort(a: Location, b: Location): number {
 }
 
 function shortName(name: string): string {
-  return name.replace("High Bank Distillery ", "").replace("High Bank ", "");
+  return name
+    .replace("High Bank Distillery ", "")
+    .replace("High Bank ", "");
 }
 
 export default function Dashboard() {
