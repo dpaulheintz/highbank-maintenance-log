@@ -74,6 +74,10 @@ export default function Dashboard() {
     setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
   }
 
+  function handleDelete(id: string) {
+    setIssues((prev) => prev.filter((i) => i.id !== id));
+  }
+
   function filteredIssues(locationId: string): IssueWithRelations[] {
     return issues.filter((issue) => {
       if (issue.location_id !== locationId) return false;
@@ -172,6 +176,7 @@ export default function Dashboard() {
                         employees={employees}
                         locationName={getLocationName(issue.location_id)}
                         onUpdate={handleUpdate}
+                        onDelete={handleDelete}
                       />
                     ))
                   )}

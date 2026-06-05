@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { sendEmail, buildEmailIssue } from "@/lib/email";
 import type { Comment, IssueWithRelations, Employee } from "@/lib/types";
 
 interface Props {
@@ -11,7 +10,7 @@ interface Props {
   locationName: string;
 }
 
-export default function UpdateSection({ issue, employees, locationName }: Props) {
+export default function UpdateSection({ issue }: Props) {
   const [updates, setUpdates] = useState<Comment[]>([]);
   const [body, setBody] = useState("");
   const [author, setAuthor] = useState("");
@@ -53,27 +52,6 @@ export default function UpdateSection({ issue, employees, locationName }: Props)
     if (!error && data) {
       setUpdates((prev) => [...prev, data as Comment]);
       localStorage.setItem("hb_reported_by", author.trim());
-
-      // Send email notification
-      const ownerEmployee = issue.employees;
-      const vendorName = issue.vendors?.name || null;
-      const emailIssue = buildEmailIssue(issue, locationName, vendorName);
-
-      // Resolve manager emails from manager_ids
-      const managerEmails = (issue.manager_ids || [])
-        .map((id) => employees.find((emp) => emp.id === id)?.email)
-        .filter(Boolean) as string[];
-
-      sendEmail({
-        type: "job_update",
-        issue: emailIssue,
-        ownerEmail: ownerEmployee?.email,
-        ownerName: ownerEmployee?.name,
-        managerEmails,
-        updateText: body.trim(),
-        updatedBy: author.trim(),
-      });
-
       setBody("");
     }
     setSubmitting(false);

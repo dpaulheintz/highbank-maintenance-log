@@ -5,7 +5,8 @@ export type Category =
   | "Electrical"
   | "Structural"
   | "Cleaning"
-  | "Pest";
+  | "Pest"
+  | "Other";
 
 export type Priority = "Low" | "Medium" | "High" | "Emergency";
 

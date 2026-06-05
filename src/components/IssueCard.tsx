@@ -3,13 +3,13 @@
 import { useState } from "react";
 import type { IssueWithRelations, Vendor, Employee, Category, Priority, Status } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { sendEmail, buildEmailIssue, isOverdue as checkOverdue } from "@/lib/email";
+import { isOverdue as checkOverdue } from "@/lib/email";
 import StatusBadge from "./StatusBadge";
 import PriorityBadge from "./PriorityBadge";
 import CommentSection from "./CommentSection";
 import UpdateSection from "./UpdateSection";
 
-const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest"];
+const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest", "Other"];
 const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Emergency"];
 const STATUSES: Status[] = ["Open", "In Progress", "Awaiting Parts", "Complete"];
 
@@ -62,14 +62,17 @@ interface Props {
   employees: Employee[];
   locationName: string;
   onUpdate: (updated: IssueWithRelations) => void;
+  onDelete?: (id: string) => void;
 }
 
-export default function IssueCard({ issue, vendors, employees, locationName, onUpdate }: Props) {
+export default function IssueCard({ issue, vendors, employees, locationName, onUpdate, onDelete }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(issue);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const overdue = checkOverdue(issue.estimated_repair_date, issue.status);
   const ownerName = issue.employees?.name || issue.owner || null;
@@ -78,10 +81,6 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
   const managers = (issue.manager_ids || [])
     .map((id) => employees.find((emp) => emp.id === id))
     .filter(Boolean) as Employee[];
-
-  const managerEmails = managers
-    .map((m) => m.email)
-    .filter(Boolean) as string[];
 
   async function save() {
     setSaving(true);
@@ -118,43 +117,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
 
     setSaving(false);
     if (!error && data) {
-      const updated = data as IssueWithRelations;
-      const vendorName = updated.vendors?.name || null;
-      const newOwner = employees.find((e) => e.id === updated.owner_id);
-      const emailIssue = buildEmailIssue(updated, locationName, vendorName);
-
-      if (draft.owner_id && draft.owner_id !== issue.owner_id) {
-        sendEmail({
-          type: "owner_assigned",
-          issue: emailIssue,
-          ownerEmail: newOwner?.email,
-          ownerName: newOwner?.name,
-          managerEmails,
-        });
-      }
-
-      if (draft.status !== issue.status) {
-        sendEmail({
-          type: "status_changed",
-          issue: emailIssue,
-          ownerEmail: newOwner?.email,
-          ownerName: newOwner?.name,
-          oldStatus: issue.status,
-          managerEmails,
-        });
-      }
-
-      if (checkOverdue(updated.estimated_repair_date, updated.status)) {
-        sendEmail({
-          type: "overdue",
-          issue: emailIssue,
-          ownerEmail: newOwner?.email,
-          ownerName: newOwner?.name,
-          managerEmails,
-        });
-      }
-
-      onUpdate(updated);
+      onUpdate(data as IssueWithRelations);
       setEditing(false);
     }
   }
@@ -176,6 +139,19 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
     if (!error && data) {
       onUpdate(data as IssueWithRelations);
       setArchiveConfirm(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const { error } = await supabase
+      .from("issues")
+      .delete()
+      .eq("id", issue.id);
+
+    setDeleting(false);
+    if (!error) {
+      onDelete?.(issue.id);
     }
   }
 
@@ -299,12 +275,18 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 >
                   Edit Issue
                 </button>
+              </div>
 
+              <UpdateSection issue={issue} employees={employees} locationName={locationName} />
+              <CommentSection issueId={issue.id} />
+
+              {/* Archive & Delete actions at bottom */}
+              <div className="border-t border-border pt-3 mt-3 flex items-center gap-3">
                 {!isArchived ? (
                   !archiveConfirm ? (
                     <button
                       onClick={() => setArchiveConfirm(true)}
-                      className="text-xs text-text-muted hover:text-[#ef4444] font-medium cursor-pointer"
+                      className="text-xs text-accent hover:text-accent-hover font-medium cursor-pointer"
                     >
                       Archive
                     </button>
@@ -313,7 +295,7 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                       <span className="text-xs text-text-muted">Archive this job? It will be hidden from the dashboard but not deleted.</span>
                       <button
                         onClick={toggleArchive}
-                        className="text-xs text-[#ef4444] font-medium cursor-pointer"
+                        className="text-xs text-accent font-medium cursor-pointer"
                       >
                         Confirm
                       </button>
@@ -333,10 +315,33 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                     Unarchive
                   </button>
                 )}
-              </div>
 
-              <UpdateSection issue={issue} employees={employees} locationName={locationName} />
-              <CommentSection issueId={issue.id} />
+                {!deleteConfirm ? (
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    className="text-xs text-[#ef4444] hover:text-[#dc2626] font-medium cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-muted">Are you sure you want to permanently delete this job? This cannot be undone.</span>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="text-xs text-[#ef4444] font-medium cursor-pointer disabled:opacity-50"
+                    >
+                      {deleting ? "Deleting..." : "Confirm"}
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(false)}
+                      className="text-xs text-text-muted cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <div className="space-y-3">

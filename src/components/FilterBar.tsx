@@ -3,7 +3,7 @@
 import type { Status, Category, Priority } from "@/lib/types";
 
 const STATUSES: Status[] = ["Open", "In Progress", "Awaiting Parts", "Complete"];
-const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest"];
+const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest", "Other"];
 const PRIORITIES: Priority[] = ["Low", "Medium", "High", "Emergency"];
 
 interface Filters {
