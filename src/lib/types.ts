@@ -74,6 +74,38 @@ export interface IssueWithRelations extends Issue {
   employees: Employee | null;
 }
 
+export type ToastStatus = "Pending" | "Approved" | "Rejected";
+
+export type ToastChangeType =
+  | "Price Change"
+  | "Item Name Change"
+  | "Item Description Change"
+  | "86 an Item"
+  | "Add New Item"
+  | "Modifier Change"
+  | "Void/Comp Reason"
+  | "Discount/Promo"
+  | "Hours Change"
+  | "Other";
+
+export interface ToastRequest {
+  id: string;
+  submitter_name: string;
+  submitter_email: string;
+  location: string;
+  change_type: ToastChangeType;
+  menu_item_name: string | null;
+  current_value: string | null;
+  requested_change: string;
+  notes_for_charles: string | null;
+  photo_urls: string[];
+  status: ToastStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  completed_at: string | null;
+  archived: boolean;
+}
+
 export interface Comment {
   id: string;
   issue_id: string;

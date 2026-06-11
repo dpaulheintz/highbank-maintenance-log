@@ -6,6 +6,7 @@ import type { Location, Vendor, Employee, IssueWithRelations } from "@/lib/types
 import IssueCard from "./IssueCard";
 import FilterBar from "./FilterBar";
 import NewRequestModal from "./NewRequestModal";
+import ToastDashboard from "./ToastDashboard";
 import Sidebar from "./Sidebar";
 import Image from "next/image";
 
@@ -23,6 +24,8 @@ function shortName(name: string): string {
     .replace("High Bank ", "");
 }
 
+type Tab = "maintenance" | "toast";
+
 export default function Dashboard() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -30,6 +33,8 @@ export default function Dashboard() {
   const [issues, setIssues] = useState<IssueWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("maintenance");
+  const [toastTrigger, setToastTrigger] = useState(0);
   const [filters, setFilters] = useState({
     status: "",
     category: "",
@@ -95,6 +100,14 @@ export default function Dashboard() {
     return locations.find((l) => l.id === id)?.name || "";
   }
 
+  function handleNewRequest() {
+    if (activeTab === "toast") {
+      setToastTrigger((t) => t + 1);
+    } else {
+      setModalOpen(true);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -119,73 +132,87 @@ export default function Dashboard() {
               priority
             />
             <p className="text-sm sm:text-base text-text-muted tracking-[0.25em] uppercase hidden sm:block" style={{ fontFamily: "'Calibri', sans-serif" }}>
-              Maintenance &amp; Repair Log
+              {activeTab === "toast" ? "Toast Change Log" : "Maintenance & Repair Log"}
             </p>
           </div>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={handleNewRequest}
             className="px-4 py-2 bg-accent text-bg text-sm font-medium rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
           >
             + New Request
           </button>
         </div>
+
+        {/* Tab switcher */}
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 pl-16 flex gap-1 border-t border-border/50">
+          <TabButton label="Maintenance Log" active={activeTab === "maintenance"} onClick={() => setActiveTab("maintenance")} />
+          <TabButton label="Toast Change Log" active={activeTab === "toast"} onClick={() => setActiveTab("toast")} />
+        </div>
       </header>
 
-      <div className="max-w-[1800px] mx-auto w-full px-4 sm:px-6 py-4">
-        <FilterBar filters={filters} onChange={setFilters} />
-      </div>
+      {activeTab === "maintenance" ? (
+        <>
+          <div className="max-w-[1800px] mx-auto w-full px-4 sm:px-6 py-4">
+            <FilterBar filters={filters} onChange={setFilters} />
+          </div>
 
-      <main className="flex-1 max-w-[1800px] mx-auto w-full px-4 sm:px-6 pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0">
-          {locations.map((location, idx) => {
-            const locIssues = filteredIssues(location.id);
-            const isLast = idx === locations.length - 1;
-            return (
-              <div
-                key={location.id}
-                className={`flex flex-col min-w-0 ${!isLast ? "border-r border-border" : ""}`}
-              >
-                <div className="flex flex-col items-center mb-3 px-3 py-3 bg-[#1F1E1A] border-b-2 border-accent rounded-t-lg relative">
-                  <div className="flex items-center gap-2 justify-center">
-                    <Image
-                      src="/logos/HB_Distillery_Round.png"
-                      alt=""
-                      width={28}
-                      height={28}
-                      className="opacity-40"
-                    />
-                    <h2 className="font-bold uppercase text-accent tracking-wide" style={{ fontSize: '22px' }}>
-                      {shortName(location.name)}
-                    </h2>
+          <main className="flex-1 max-w-[1800px] mx-auto w-full px-4 sm:px-6 pb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0">
+              {locations.map((location, idx) => {
+                const locIssues = filteredIssues(location.id);
+                const isLast = idx === locations.length - 1;
+                return (
+                  <div
+                    key={location.id}
+                    className={`flex flex-col min-w-0 ${!isLast ? "border-r border-border" : ""}`}
+                  >
+                    <div className="flex flex-col items-center mb-3 px-3 py-3 bg-[#1F1E1A] border-b-2 border-accent rounded-t-lg relative">
+                      <div className="flex items-center gap-2 justify-center">
+                        <Image
+                          src="/logos/HB_Distillery_Round.png"
+                          alt=""
+                          width={28}
+                          height={28}
+                          className="opacity-40"
+                        />
+                        <h2 className="font-bold uppercase text-accent tracking-wide" style={{ fontSize: "22px" }}>
+                          {shortName(location.name)}
+                        </h2>
+                      </div>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted bg-surface px-2 py-0.5 rounded-full">
+                        {locIssues.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3 flex-1 px-2.5 column-bg">
+                      {locIssues.length === 0 ? (
+                        <p className="text-sm text-text-muted text-center py-8 opacity-60">
+                          No issues
+                        </p>
+                      ) : (
+                        locIssues.map((issue) => (
+                          <IssueCard
+                            key={issue.id}
+                            issue={issue}
+                            vendors={vendors}
+                            employees={employees}
+                            locationName={getLocationName(issue.location_id)}
+                            onUpdate={handleUpdate}
+                            onDelete={handleDelete}
+                          />
+                        ))
+                      )}
+                    </div>
                   </div>
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted bg-surface px-2 py-0.5 rounded-full">
-                    {locIssues.length}
-                  </span>
-                </div>
-                <div className="space-y-3 flex-1 px-2.5 column-bg">
-                  {locIssues.length === 0 ? (
-                    <p className="text-sm text-text-muted text-center py-8 opacity-60">
-                      No issues
-                    </p>
-                  ) : (
-                    locIssues.map((issue) => (
-                      <IssueCard
-                        key={issue.id}
-                        issue={issue}
-                        vendors={vendors}
-                        employees={employees}
-                        locationName={getLocationName(issue.location_id)}
-                        onUpdate={handleUpdate}
-                        onDelete={handleDelete}
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </main>
+                );
+              })}
+            </div>
+          </main>
+        </>
+      ) : (
+        <main className="flex-1 flex flex-col max-w-[1800px] mx-auto w-full">
+          <ToastDashboard newRequestTrigger={toastTrigger} />
+        </main>
+      )}
 
       {modalOpen && (
         <NewRequestModal
@@ -197,5 +224,20 @@ export default function Dashboard() {
         />
       )}
     </div>
+  );
+}
+
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 text-xs font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
+        active
+          ? "border-accent text-accent"
+          : "border-transparent text-text-muted hover:text-text"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

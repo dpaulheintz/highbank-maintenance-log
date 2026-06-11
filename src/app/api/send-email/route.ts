@@ -15,7 +15,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-function branded(body: string): string {
+function branded(body: string, subtitle = "Maintenance &amp; Repair Log", footer = "High Bank Distillery Maintenance Log"): string {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"/></head>
@@ -23,13 +23,13 @@ function branded(body: string): string {
   <div style="max-width:600px;margin:0 auto;background:#ffffff;">
     <div style="background:#1C1B18;padding:24px 32px;">
       <h1 style="margin:0;color:#C8922A;font-size:20px;font-weight:600;">High Bank Distillery</h1>
-      <p style="margin:4px 0 0;color:#9e9a8f;font-size:12px;letter-spacing:2px;text-transform:uppercase;">Maintenance &amp; Repair Log</p>
+      <p style="margin:4px 0 0;color:#9e9a8f;font-size:12px;letter-spacing:2px;text-transform:uppercase;">${subtitle}</p>
     </div>
     <div style="padding:24px 32px;color:#1C1B18;font-size:14px;line-height:1.6;">
       ${body}
     </div>
     <div style="background:#1C1B18;padding:16px 32px;text-align:center;">
-      <p style="margin:0;color:#9e9a8f;font-size:11px;">High Bank Distillery Maintenance Log</p>
+      <p style="margin:0;color:#9e9a8f;font-size:11px;">${footer}</p>
     </div>
   </div>
 </body>
@@ -60,9 +60,111 @@ function urgentBanner(): string {
   return `<div style="background:#ef4444;color:#fff;padding:10px 32px;font-size:15px;font-weight:bold;text-align:center;letter-spacing:1px;margin-bottom:8px;">⚠ URGENT</div>`;
 }
 
+interface ToastEmailPayload {
+  submitter_name: string;
+  submitter_email: string;
+  location: string;
+  change_type: string;
+  menu_item_name: string | null;
+  current_value: string | null;
+  requested_change: string;
+  notes_for_charles: string | null;
+}
+
+function toastTable(req: ToastEmailPayload): string {
+  return table({
+    "Submitter": req.submitter_name,
+    "Email": req.submitter_email,
+    "Location": req.location,
+    "Change Type": req.change_type,
+    "Menu Item": req.menu_item_name || null,
+    "Current Value": req.current_value || null,
+    "Requested Change": req.requested_change,
+    "Notes for Charles": req.notes_for_charles || null,
+  });
+}
+
+async function handleToastEmail(type: string, body: Record<string, unknown>): Promise<NextResponse> {
+  const req = body.toastRequest as ToastEmailPayload;
+  const rejection_reason = body.rejection_reason as string | null | undefined;
+
+  let subject = "";
+  let html = "";
+  let toAddress = "";
+  let ccAddress: string | undefined;
+
+  const toastSubtitle = "Toast Change Log";
+  const toastFooter = "High Bank Distillery — Toast Change Log";
+
+  switch (type) {
+    case "toast_new_request": {
+      subject = `New Toast Change Request: ${req.change_type} — ${req.location}`;
+      html = branded(`
+        <h2 style="margin:0 0 4px;font-size:18px;color:#1C1B18;">New Toast Change Request</h2>
+        <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">A new change request has been submitted for Toast POS.</p>
+        ${toastTable(req)}
+      `, toastSubtitle, toastFooter);
+      toAddress = "ccarter@highbankco.com";
+      break;
+    }
+    case "toast_approved": {
+      subject = `Toast Change Approved: ${req.menu_item_name || req.change_type}`;
+      html = branded(`
+        <h2 style="margin:0 0 4px;font-size:18px;color:#22c55e;">Your Toast Change Request Has Been Approved</h2>
+        <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">Charles has reviewed and completed your request in Toast POS.</p>
+        ${toastTable(req)}
+      `, toastSubtitle, toastFooter);
+      toAddress = req.submitter_email;
+      ccAddress = "ccarter@highbankco.com";
+      break;
+    }
+    case "toast_rejected": {
+      subject = `Toast Change Request: ${req.menu_item_name || req.change_type} — Not Approved`;
+      html = branded(`
+        <h2 style="margin:0 0 4px;font-size:18px;color:#ef4444;">Your Toast Change Request Has Not Been Approved</h2>
+        ${rejection_reason ? `<div style="background:#fef2f2;border-left:3px solid #ef4444;padding:12px 16px;margin:16px 0;font-size:14px;color:#1C1B18;"><strong>Reason:</strong> ${rejection_reason}</div>` : ""}
+        <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">Please reach out to Charles with any questions.</p>
+        ${toastTable(req)}
+      `, toastSubtitle, toastFooter);
+      toAddress = req.submitter_email;
+      ccAddress = "ccarter@highbankco.com";
+      break;
+    }
+    default:
+      return NextResponse.json({ error: "Unknown toast type" }, { status: 400 });
+  }
+
+  // TODO: Remove test mode before go-live
+  const finalTo = TEST_MODE ? TEST_EMAIL : toAddress;
+  const finalCc = TEST_MODE ? undefined : ccAddress;
+
+  if (TEST_MODE) {
+    console.log(`[TEST MODE] Toast email "${subject}" → ${toAddress}${ccAddress ? `, CC: ${ccAddress}` : ""} — redirected to ${TEST_EMAIL}`);
+  }
+
+  await transporter.sendMail({
+    from: `"High Bank Toast Change Log" <no-reply@highbankco.com>`,
+    to: finalTo,
+    cc: finalCc,
+    subject,
+    html,
+  });
+
+  return NextResponse.json({ success: true });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { type, issue, ownerEmail, ownerName, oldStatus, managerEmails, updateText, updatedBy } = await req.json();
+    const body = await req.json();
+    const { type } = body;
+
+    // Route toast emails to separate handler
+    if (type === "toast_new_request" || type === "toast_approved" || type === "toast_rejected") {
+      return await handleToastEmail(type, body);
+    }
+
+    // Maintenance email handling
+    const { issue, ownerEmail, ownerName, oldStatus, managerEmails, updateText, updatedBy } = body;
 
     const loc = issue.locationName || "Unknown Location";
     const isUrgent = issue.priority === "Emergency" || issue.priority === "High";
@@ -143,11 +245,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Unknown type" }, { status: 400 });
     }
 
-    // Collect intended recipients (unused in test mode, but logged for visibility)
     const intendedTo = [ownerEmail, ...(managerEmails || [])].filter(Boolean);
 
     // TODO: Remove test mode before go-live
-    // In test mode all emails go only to TEST_EMAIL regardless of actual recipients.
     const to = TEST_MODE ? TEST_EMAIL : (intendedTo.length > 0 ? intendedTo.join(", ") : TEST_EMAIL);
 
     if (TEST_MODE) {

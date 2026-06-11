@@ -57,3 +57,30 @@ export async function sendEmail(payload: {
     console.error("Failed to send email:", err);
   }
 }
+
+export interface ToastEmailPayload {
+  submitter_name: string;
+  submitter_email: string;
+  location: string;
+  change_type: string;
+  menu_item_name: string | null;
+  current_value: string | null;
+  requested_change: string;
+  notes_for_charles: string | null;
+}
+
+export async function sendToastEmail(payload: {
+  type: "toast_new_request" | "toast_approved" | "toast_rejected";
+  toastRequest: ToastEmailPayload;
+  rejection_reason?: string | null;
+}) {
+  try {
+    await fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.error("Failed to send toast email:", err);
+  }
+}
