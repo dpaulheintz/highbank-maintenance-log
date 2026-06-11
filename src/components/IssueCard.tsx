@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { IssueWithRelations, Vendor, Employee, Category, Priority, Status } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { isOverdue as checkOverdue } from "@/lib/email";
+import { isOverdue as checkOverdue, sendEmail, buildEmailIssue } from "@/lib/email";
 import StatusBadge from "./StatusBadge";
 import PriorityBadge from "./PriorityBadge";
 import CommentSection from "./CommentSection";
@@ -117,7 +117,23 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
 
     setSaving(false);
     if (!error && data) {
-      onUpdate(data as IssueWithRelations);
+      const updated = data as IssueWithRelations;
+      const vendorName = updated.vendors?.name || null;
+      const newOwner = employees.find((e) => e.id === updated.owner_id);
+      const managerEmails = managers.map((m) => m.email).filter(Boolean) as string[];
+      const emailIssue = buildEmailIssue(updated, locationName, vendorName);
+
+      if (draft.owner_id && draft.owner_id !== issue.owner_id) {
+        sendEmail({ type: "owner_assigned", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, managerEmails });
+      }
+      if (draft.status !== issue.status) {
+        sendEmail({ type: "status_changed", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, oldStatus: issue.status, managerEmails });
+      }
+      if (checkOverdue(updated.estimated_repair_date, updated.status)) {
+        sendEmail({ type: "overdue", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, managerEmails });
+      }
+
+      onUpdate(updated);
       setEditing(false);
     }
   }

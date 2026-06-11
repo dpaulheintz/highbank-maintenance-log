@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { sendEmail, buildEmailIssue } from "@/lib/email";
 import type { Location, Vendor, Employee, Category, Priority, IssueWithRelations, VendorCategory } from "@/lib/types";
 
 const CATEGORIES: Category[] = ["Equipment", "Plumbing", "HVAC", "Electrical", "Structural", "Cleaning", "Pest", "Other"];
@@ -174,7 +175,17 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
     if (dbError) { setError(dbError.message); return; }
 
     if (data) {
-      onCreated(data as IssueWithRelations);
+      const created = data as IssueWithRelations;
+      const loc = locations.find((l) => l.id === locationId);
+      const emailIssue = buildEmailIssue(created, loc?.name || "", created.vendors?.name || null);
+      const mgrEmails = managerIds.map((id) => employees.find((e) => e.id === id)?.email).filter(Boolean) as string[];
+
+      sendEmail({ type: "new_request", issue: emailIssue, ownerName: selectedOwner?.name, ownerEmail: selectedOwner?.email, managerEmails: mgrEmails });
+      if (selectedOwner) {
+        sendEmail({ type: "owner_assigned", issue: emailIssue, ownerEmail: selectedOwner.email, ownerName: selectedOwner.name, managerEmails: mgrEmails });
+      }
+
+      onCreated(created);
     }
   }
 
