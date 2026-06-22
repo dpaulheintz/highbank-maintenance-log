@@ -39,7 +39,6 @@ export default function Dashboard() {
     status: "",
     category: "",
     priority: "",
-    showCompleted: false,
     showArchived: false,
   });
 
@@ -83,15 +82,29 @@ export default function Dashboard() {
     setIssues((prev) => prev.filter((i) => i.id !== id));
   }
 
-  function filteredIssues(locationId: string): IssueWithRelations[] {
+  function baseFilter(issue: IssueWithRelations, locationId: string): boolean {
+    if (issue.location_id !== locationId) return false;
+    if (!filters.showArchived && issue.archived) return false;
+    if (filters.showArchived && !issue.archived) return false;
+    if (filters.category && issue.category !== filters.category) return false;
+    if (filters.priority && issue.priority !== filters.priority) return false;
+    return true;
+  }
+
+  function activeIssuesFor(locationId: string): IssueWithRelations[] {
     return issues.filter((issue) => {
-      if (issue.location_id !== locationId) return false;
-      if (!filters.showArchived && issue.archived) return false;
-      if (filters.showArchived && !issue.archived) return false;
-      if (!filters.showCompleted && !filters.showArchived && issue.status === "Complete") return false;
+      if (!baseFilter(issue, locationId)) return false;
+      if (issue.status === "Complete") return false;
       if (filters.status && issue.status !== filters.status) return false;
-      if (filters.category && issue.category !== filters.category) return false;
-      if (filters.priority && issue.priority !== filters.priority) return false;
+      return true;
+    });
+  }
+
+  function completedIssuesFor(locationId: string): IssueWithRelations[] {
+    return issues.filter((issue) => {
+      if (!baseFilter(issue, locationId)) return false;
+      if (issue.status !== "Complete") return false;
+      if (filters.status && filters.status !== "Complete") return false;
       return true;
     });
   }
@@ -107,6 +120,8 @@ export default function Dashboard() {
       setModalOpen(true);
     }
   }
+
+  const hasCompleted = locations.some((loc) => completedIssuesFor(loc.id).length > 0);
 
   if (loading) {
     return (
@@ -143,7 +158,6 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Tab switcher */}
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 pl-16 flex gap-1 border-t border-border/50">
           <TabButton label="Maintenance Log" active={activeTab === "maintenance"} onClick={() => setActiveTab("maintenance")} />
           <TabButton label="Toast Change Log" active={activeTab === "toast"} onClick={() => setActiveTab("toast")} />
@@ -157,9 +171,10 @@ export default function Dashboard() {
           </div>
 
           <main className="flex-1 max-w-[1800px] mx-auto w-full px-4 sm:px-6 pb-8">
+            {/* Active issues */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0">
               {locations.map((location, idx) => {
-                const locIssues = filteredIssues(location.id);
+                const active = activeIssuesFor(location.id);
                 const isLast = idx === locations.length - 1;
                 return (
                   <div
@@ -180,16 +195,16 @@ export default function Dashboard() {
                         </h2>
                       </div>
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted bg-surface px-2 py-0.5 rounded-full">
-                        {locIssues.length}
+                        {active.length}
                       </span>
                     </div>
                     <div className="space-y-3 flex-1 px-2.5 column-bg">
-                      {locIssues.length === 0 ? (
+                      {active.length === 0 ? (
                         <p className="text-sm text-text-muted text-center py-8 opacity-60">
                           No issues
                         </p>
                       ) : (
-                        locIssues.map((issue) => (
+                        active.map((issue) => (
                           <IssueCard
                             key={issue.id}
                             issue={issue}
@@ -206,6 +221,48 @@ export default function Dashboard() {
                 );
               })}
             </div>
+
+            {/* Completed divider */}
+            {hasCompleted && (
+              <div className="py-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold uppercase tracking-wider shrink-0" style={{ color: "#C8922A" }}>
+                    COMPLETED
+                  </span>
+                  <div className="flex-1 h-[2px]" style={{ backgroundColor: "rgba(200, 146, 42, 0.6)" }} />
+                </div>
+              </div>
+            )}
+
+            {/* Completed issues */}
+            {hasCompleted && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0">
+                {locations.map((location, idx) => {
+                  const completed = completedIssuesFor(location.id);
+                  const isLast = idx === locations.length - 1;
+                  return (
+                    <div
+                      key={location.id}
+                      className={`flex flex-col min-w-0 ${!isLast ? "border-r border-border" : ""}`}
+                    >
+                      <div className="space-y-3 px-2.5 column-bg pb-4">
+                        {completed.map((issue) => (
+                          <IssueCard
+                            key={issue.id}
+                            issue={issue}
+                            vendors={vendors}
+                            employees={employees}
+                            locationName={getLocationName(issue.location_id)}
+                            onUpdate={handleUpdate}
+                            onDelete={handleDelete}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </main>
         </>
       ) : (

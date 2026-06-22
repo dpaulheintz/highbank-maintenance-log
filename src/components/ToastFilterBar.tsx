@@ -2,7 +2,7 @@
 
 import type { ToastStatus, ToastChangeType } from "@/lib/types";
 
-const STATUSES: ToastStatus[] = ["Pending", "Approved", "Rejected"];
+const STATUSES: ToastStatus[] = ["Pending", "Published", "Rejected"];
 const CHANGE_TYPES: ToastChangeType[] = [
   "Price Change",
   "Item Name Change",
@@ -20,6 +20,7 @@ export interface ToastFilters {
   status: ToastStatus | "";
   changeType: ToastChangeType | "";
   showArchived: boolean;
+  showRejected: boolean;
 }
 
 interface Props {
@@ -53,6 +54,16 @@ export default function ToastFilterBar({ filters, onChange }: Props) {
       </select>
 
       <label className="flex items-center gap-2 cursor-pointer text-xs text-text-muted">
+        <input
+          type="checkbox"
+          checked={filters.showRejected}
+          onChange={(e) => onChange({ ...filters, showRejected: e.target.checked })}
+          className="accent-accent"
+        />
+        Show Rejected
+      </label>
+
+      <label className="flex items-center gap-2 cursor-pointer text-xs text-text-muted opacity-70 hover:opacity-100 transition-opacity">
         <input
           type="checkbox"
           checked={filters.showArchived}

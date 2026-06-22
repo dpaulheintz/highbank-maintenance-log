@@ -23,9 +23,10 @@ const CHANGE_TYPE_COLORS: Record<string, string> = {
 interface Props {
   request: ToastRequest;
   onUpdate: (r: ToastRequest) => void;
+  rejected?: boolean;
 }
 
-export default function ToastCard({ request, onUpdate }: Props) {
+export default function ToastCard({ request, onUpdate, rejected }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [rejectionText, setRejectionText] = useState("");
@@ -36,7 +37,7 @@ export default function ToastCard({ request, onUpdate }: Props) {
   const badgeColor = CHANGE_TYPE_COLORS[request.change_type] || "#9ca3af";
 
   const borderColor =
-    request.status === "Approved"
+    request.status === "Published"
       ? "#22c55e"
       : request.status === "Rejected"
       ? "#ef4444"
@@ -55,17 +56,17 @@ export default function ToastCard({ request, onUpdate }: Props) {
     };
   }
 
-  async function handleApprove() {
+  async function handlePublish() {
     setLoading(true);
     const { data, error } = await supabase
       .from("toast_requests")
-      .update({ status: "Approved", completed_at: new Date().toISOString() })
+      .update({ status: "Published", completed_at: new Date().toISOString() })
       .eq("id", request.id)
       .select()
       .single();
     if (!error && data) {
       onUpdate(data as ToastRequest);
-      sendToastEmail({ type: "toast_approved", toastRequest: buildEmailPayload() });
+      sendToastEmail({ type: "toast_published", toastRequest: buildEmailPayload() });
     }
     setLoading(false);
   }
@@ -111,6 +112,8 @@ export default function ToastCard({ request, onUpdate }: Props) {
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+  const cardOpacity = request.archived ? 0.5 : rejected ? 0.6 : 1;
+
   return (
     <>
       {lightboxUrl && (
@@ -124,9 +127,8 @@ export default function ToastCard({ request, onUpdate }: Props) {
 
       <div
         className="rounded-xl border-l-4 shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)] overflow-hidden transition-opacity duration-200"
-        style={{ borderColor, opacity: request.archived ? 0.5 : 1, background: "var(--color-surface)" }}
+        style={{ borderColor, opacity: cardOpacity, background: "var(--color-surface)" }}
       >
-        {/* Header row — always visible */}
         <button
           className="w-full text-left px-3 pt-3 pb-2 cursor-pointer"
           onClick={() => setExpanded((v) => !v)}
@@ -143,6 +145,11 @@ export default function ToastCard({ request, onUpdate }: Props) {
                 {request.archived && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-border text-text-muted uppercase tracking-wide">
                     Archived
+                  </span>
+                )}
+                {rejected && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-semibold" style={{ background: "#ef444422", color: "#ef4444" }}>
+                    Rejected
                   </span>
                 )}
               </div>
@@ -167,7 +174,6 @@ export default function ToastCard({ request, onUpdate }: Props) {
           </div>
         </button>
 
-        {/* Expanded detail */}
         {expanded && (
           <div className="px-3 pb-3 border-t border-border pt-3 space-y-3">
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
@@ -178,7 +184,7 @@ export default function ToastCard({ request, onUpdate }: Props) {
               {request.current_value && <DetailRow label="Current Value" value={request.current_value} />}
               {request.completed_at && (
                 <DetailRow
-                  label={request.status === "Approved" ? "Approved" : "Rejected"}
+                  label={request.status === "Published" ? "Published" : "Rejected"}
                   value={fmtDate(request.completed_at)}
                 />
               )}
@@ -220,7 +226,6 @@ export default function ToastCard({ request, onUpdate }: Props) {
               </div>
             )}
 
-            {/* Actions */}
             {request.status === "Pending" && !request.archived && (
               <div className="border-t border-border pt-3 space-y-2">
                 {rejecting ? (
@@ -252,11 +257,11 @@ export default function ToastCard({ request, onUpdate }: Props) {
                 ) : (
                   <div className="flex gap-2">
                     <button
-                      onClick={handleApprove}
+                      onClick={handlePublish}
                       disabled={loading}
                       className="flex-1 py-1.5 bg-[#22c55e] text-white text-xs font-medium rounded hover:bg-[#16a34a] disabled:opacity-50 cursor-pointer"
                     >
-                      {loading ? "..." : "Approve"}
+                      {loading ? "..." : "Publish"}
                     </button>
                     <button
                       onClick={() => setRejecting(true)}
@@ -270,7 +275,6 @@ export default function ToastCard({ request, onUpdate }: Props) {
               </div>
             )}
 
-            {/* Archive toggle */}
             <div className="border-t border-border pt-2">
               {archiveConfirm ? (
                 <div className="flex items-center gap-2">
@@ -308,7 +312,7 @@ export default function ToastCard({ request, onUpdate }: Props) {
 
 function StatusBadge({ status }: { status: string }) {
   const color =
-    status === "Approved" ? "#22c55e" :
+    status === "Published" ? "#22c55e" :
     status === "Rejected" ? "#ef4444" :
     "#C8922A";
   return (

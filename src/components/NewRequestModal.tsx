@@ -65,6 +65,7 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
   const [isWriteIn, setIsWriteIn] = useState(false);
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [reportedBy, setReportedBy] = useState("");
+  const [reportedByEmail, setReportedByEmail] = useState("");
   const [managerIds, setManagerIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -102,6 +103,8 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
   useEffect(() => {
     const saved = localStorage.getItem("hb_reported_by");
     if (saved) setReportedBy(saved);
+    const savedEmail = localStorage.getItem("hb_reported_by_email");
+    if (savedEmail) setReportedByEmail(savedEmail);
   }, []);
 
   useEffect(() => {
@@ -142,6 +145,9 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
     if (reportedBy.trim()) {
       localStorage.setItem("hb_reported_by", reportedBy.trim());
     }
+    if (reportedByEmail.trim()) {
+      localStorage.setItem("hb_reported_by_email", reportedByEmail.trim());
+    }
 
     const photoUrls = await uploadPhotos();
 
@@ -166,6 +172,7 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
         manager_ids: managerIds,
         photo_urls: photoUrls,
         reported_by: reportedBy.trim() || null,
+        reported_by_email: reportedByEmail.trim() || null,
         completed_at: null,
       })
       .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
@@ -180,9 +187,10 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
       const emailIssue = buildEmailIssue(created, loc?.name || "", created.vendors?.name || null);
       const mgrEmails = managerIds.map((id) => employees.find((e) => e.id === id)?.email).filter(Boolean) as string[];
 
-      sendEmail({ type: "new_request", issue: emailIssue, ownerName: selectedOwner?.name, ownerEmail: selectedOwner?.email, managerEmails: mgrEmails });
+      const submitterEmail = reportedByEmail.trim() || null;
+      sendEmail({ type: "new_request", issue: emailIssue, ownerName: selectedOwner?.name, ownerEmail: selectedOwner?.email, managerEmails: mgrEmails, reportedByEmail: submitterEmail });
       if (selectedOwner) {
-        sendEmail({ type: "owner_assigned", issue: emailIssue, ownerEmail: selectedOwner.email, ownerName: selectedOwner.name, managerEmails: mgrEmails });
+        sendEmail({ type: "owner_assigned", issue: emailIssue, ownerEmail: selectedOwner.email, ownerName: selectedOwner.name, managerEmails: mgrEmails, reportedByEmail: submitterEmail });
       }
 
       onCreated(created);
@@ -369,6 +377,16 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
               <input value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} placeholder="Your name" className="form-input" />
             </FormField>
           </div>
+
+          <FormField label="Your Email (optional)">
+            <input
+              type="email"
+              value={reportedByEmail}
+              onChange={(e) => setReportedByEmail(e.target.value)}
+              placeholder="you@highbankco.com"
+              className="form-input"
+            />
+          </FormField>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-text-muted hover:text-text cursor-pointer">

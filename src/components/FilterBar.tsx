@@ -10,7 +10,6 @@ interface Filters {
   status: string;
   category: string;
   priority: string;
-  showCompleted: boolean;
   showArchived: boolean;
 }
 
@@ -40,16 +39,7 @@ export default function FilterBar({ filters, onChange }: Props) {
         options={PRIORITIES}
         onChange={(v) => onChange({ ...filters, priority: v })}
       />
-      <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={filters.showCompleted}
-          onChange={(e) => onChange({ ...filters, showCompleted: e.target.checked })}
-          className="accent-accent w-3.5 h-3.5"
-        />
-        Show completed
-      </label>
-      <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer select-none ml-2 opacity-70 hover:opacity-100 transition-opacity">
+      <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer select-none opacity-70 hover:opacity-100 transition-opacity">
         <input
           type="checkbox"
           checked={filters.showArchived}

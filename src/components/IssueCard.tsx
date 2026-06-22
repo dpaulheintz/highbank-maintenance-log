@@ -123,14 +123,15 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
       const managerEmails = managers.map((m) => m.email).filter(Boolean) as string[];
       const emailIssue = buildEmailIssue(updated, locationName, vendorName);
 
+      const rptEmail = updated.reported_by_email || null;
       if (draft.owner_id && draft.owner_id !== issue.owner_id) {
-        sendEmail({ type: "owner_assigned", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, managerEmails });
+        sendEmail({ type: "owner_assigned", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, managerEmails, reportedByEmail: rptEmail });
       }
       if (draft.status !== issue.status) {
-        sendEmail({ type: "status_changed", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, oldStatus: issue.status, managerEmails });
+        sendEmail({ type: "status_changed", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, oldStatus: issue.status, managerEmails, reportedByEmail: rptEmail });
       }
       if (checkOverdue(updated.estimated_repair_date, updated.status)) {
-        sendEmail({ type: "overdue", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, managerEmails });
+        sendEmail({ type: "overdue", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, managerEmails, reportedByEmail: rptEmail });
       }
 
       onUpdate(updated);

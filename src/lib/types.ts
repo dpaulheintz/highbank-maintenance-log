@@ -62,6 +62,7 @@ export interface Issue {
   manager_ids: string[];
   photo_urls: string[];
   reported_by: string | null;
+  reported_by_email: string | null;
   created_at: string;
   completed_at: string | null;
   archived: boolean;
@@ -74,7 +75,7 @@ export interface IssueWithRelations extends Issue {
   employees: Employee | null;
 }
 
-export type ToastStatus = "Pending" | "Approved" | "Rejected";
+export type ToastStatus = "Pending" | "Published" | "Rejected";
 
 export type ToastChangeType =
   | "Price Change"

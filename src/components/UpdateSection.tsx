@@ -57,7 +57,7 @@ export default function UpdateSection({ issue, employees, locationName }: Props)
       const ownerEmployee = issue.employees;
       const managerEmails = (issue.manager_ids || []).map((id) => employees.find((e) => e.id === id)?.email).filter(Boolean) as string[];
       const emailIssue = buildEmailIssue(issue, locationName, issue.vendors?.name || null);
-      sendEmail({ type: "job_update", issue: emailIssue, ownerEmail: ownerEmployee?.email, ownerName: ownerEmployee?.name, managerEmails, updateText: body.trim(), updatedBy: author.trim() });
+      sendEmail({ type: "job_update", issue: emailIssue, ownerEmail: ownerEmployee?.email, ownerName: ownerEmployee?.name, managerEmails, updateText: body.trim(), updatedBy: author.trim(), reportedByEmail: issue.reported_by_email || null });
 
       setBody("");
     }

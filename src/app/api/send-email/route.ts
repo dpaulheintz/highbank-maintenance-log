@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 
-// TODO: Remove test mode before go-live
-const TEST_MODE = true;
-const TEST_EMAIL = "pheintzman@highbankco.com";
-
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
@@ -15,7 +11,18 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-function branded(body: string, subtitle = "Maintenance &amp; Repair Log", footer = "High Bank Distillery Maintenance Log"): string {
+function dedupe(emails: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  return emails.filter((e): e is string => {
+    if (!e) return false;
+    const lower = e.toLowerCase().trim();
+    if (seen.has(lower)) return false;
+    seen.add(lower);
+    return true;
+  });
+}
+
+function branded(body: string, subtitle = "Maintenance &amp; Repair Log"): string {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"/></head>
@@ -29,7 +36,7 @@ function branded(body: string, subtitle = "Maintenance &amp; Repair Log", footer
       ${body}
     </div>
     <div style="background:#1C1B18;padding:16px 32px;text-align:center;">
-      <p style="margin:0;color:#9e9a8f;font-size:11px;">${footer}</p>
+      <p style="margin:0;color:#9e9a8f;font-size:11px;">High Bank Distillery Operations</p>
     </div>
   </div>
 </body>
@@ -90,11 +97,10 @@ async function handleToastEmail(type: string, body: Record<string, unknown>): Pr
 
   let subject = "";
   let html = "";
-  let toAddress = "";
-  let ccAddress: string | undefined;
+  let toList: string[] = [];
+  let ccList: string[] = [];
 
   const toastSubtitle = "Toast Change Log";
-  const toastFooter = "High Bank Distillery — Toast Change Log";
 
   switch (type) {
     case "toast_new_request": {
@@ -103,49 +109,44 @@ async function handleToastEmail(type: string, body: Record<string, unknown>): Pr
         <h2 style="margin:0 0 4px;font-size:18px;color:#1C1B18;">New Toast Change Request</h2>
         <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">A new change request has been submitted for Toast POS.</p>
         ${toastTable(req)}
-      `, toastSubtitle, toastFooter);
-      toAddress = "ccarter@highbankco.com";
+      `, toastSubtitle);
+      toList = ["ccarter@highbankco.com"];
       break;
     }
-    case "toast_approved": {
-      subject = `Toast Change Approved: ${req.menu_item_name || req.change_type}`;
+    case "toast_published": {
+      subject = `Toast Change Published: ${req.menu_item_name || req.change_type}`;
       html = branded(`
-        <h2 style="margin:0 0 4px;font-size:18px;color:#22c55e;">Your Toast Change Request Has Been Approved</h2>
-        <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">Charles has reviewed and completed your request in Toast POS.</p>
+        <h2 style="margin:0 0 4px;font-size:18px;color:#22c55e;">Your Toast Change Has Been Published</h2>
+        <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">Charles has reviewed and published your change in Toast.</p>
         ${toastTable(req)}
-      `, toastSubtitle, toastFooter);
-      toAddress = req.submitter_email;
-      ccAddress = "ccarter@highbankco.com";
+      `, toastSubtitle);
+      toList = [req.submitter_email];
+      ccList = ["ccarter@highbankco.com"];
       break;
     }
     case "toast_rejected": {
-      subject = `Toast Change Request: ${req.menu_item_name || req.change_type} — Not Approved`;
+      subject = `Toast Change Request Not Approved: ${req.menu_item_name || req.change_type}`;
       html = branded(`
         <h2 style="margin:0 0 4px;font-size:18px;color:#ef4444;">Your Toast Change Request Has Not Been Approved</h2>
         ${rejection_reason ? `<div style="background:#fef2f2;border-left:3px solid #ef4444;padding:12px 16px;margin:16px 0;font-size:14px;color:#1C1B18;"><strong>Reason:</strong> ${rejection_reason}</div>` : ""}
         <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">Please reach out to Charles with any questions.</p>
         ${toastTable(req)}
-      `, toastSubtitle, toastFooter);
-      toAddress = req.submitter_email;
-      ccAddress = "ccarter@highbankco.com";
+      `, toastSubtitle);
+      toList = [req.submitter_email];
+      ccList = ["ccarter@highbankco.com"];
       break;
     }
     default:
       return NextResponse.json({ error: "Unknown toast type" }, { status: 400 });
   }
 
-  // TODO: Remove test mode before go-live
-  const finalTo = TEST_MODE ? TEST_EMAIL : toAddress;
-  const finalCc = TEST_MODE ? undefined : ccAddress;
-
-  if (TEST_MODE) {
-    console.log(`[TEST MODE] Toast email "${subject}" → ${toAddress}${ccAddress ? `, CC: ${ccAddress}` : ""} — redirected to ${TEST_EMAIL}`);
-  }
+  const to = dedupe(toList);
+  const cc = dedupe(ccList.filter((e) => !to.map((t) => t.toLowerCase()).includes(e.toLowerCase())));
 
   await transporter.sendMail({
-    from: `"High Bank Toast Change Log" <no-reply@highbankco.com>`,
-    to: finalTo,
-    cc: finalCc,
+    from: `"High Bank Maintenance" <no-reply@highbankco.com>`,
+    to: to.join(", "),
+    cc: cc.length > 0 ? cc.join(", ") : undefined,
     subject,
     html,
   });
@@ -158,13 +159,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { type } = body;
 
-    // Route toast emails to separate handler
-    if (type === "toast_new_request" || type === "toast_approved" || type === "toast_rejected") {
+    if (type === "toast_new_request" || type === "toast_published" || type === "toast_rejected") {
       return await handleToastEmail(type, body);
     }
 
-    // Maintenance email handling
-    const { issue, ownerEmail, ownerName, oldStatus, managerEmails, updateText, updatedBy } = body;
+    const { issue, ownerEmail, ownerName, oldStatus, updateText, updatedBy, reportedByEmail } = body;
 
     const loc = issue.locationName || "Unknown Location";
     const isUrgent = issue.priority === "Emergency" || issue.priority === "High";
@@ -189,6 +188,8 @@ export async function POST(req: NextRequest) {
 
     let subject = "";
     let html = "";
+    let toList: string[] = [];
+    let ccList: string[] = [];
 
     switch (type) {
       case "new_request": {
@@ -199,6 +200,8 @@ export async function POST(req: NextRequest) {
           <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">A new issue has been submitted.</p>
           ${details}${desc}
         `);
+        toList = ["maintenance@highbankco.com"];
+        ccList = ["ccarter@highbankco.com", reportedByEmail];
         break;
       }
       case "owner_assigned": {
@@ -208,6 +211,8 @@ export async function POST(req: NextRequest) {
           <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">${ownerName || "You"}, you have been assigned the following maintenance issue.</p>
           ${details}${desc}
         `);
+        toList = [ownerEmail];
+        ccList = ["ccarter@highbankco.com", "maintenance@highbankco.com"];
         break;
       }
       case "status_changed": {
@@ -217,6 +222,8 @@ export async function POST(req: NextRequest) {
           <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">Status changed from <strong>${oldStatus}</strong> to <strong>${issue.status}</strong>.</p>
           ${details}${desc}
         `);
+        toList = ["maintenance@highbankco.com"];
+        ccList = ["ccarter@highbankco.com", reportedByEmail];
         break;
       }
       case "overdue": {
@@ -228,6 +235,8 @@ export async function POST(req: NextRequest) {
           <p style="margin:0 0 16px;color:#9e9a8f;font-size:13px;">This issue is <strong style="color:#d97706;">${diffDays} day${diffDays !== 1 ? "s" : ""} overdue</strong>.</p>
           ${details}${desc}
         `);
+        toList = ["maintenance@highbankco.com"];
+        ccList = ["ccarter@highbankco.com", ownerEmail, reportedByEmail];
         break;
       }
       case "job_update": {
@@ -239,24 +248,21 @@ export async function POST(req: NextRequest) {
           <p style="margin:0;font-size:13px;color:#9e9a8f;">Current Status: <strong style="color:#1C1B18;">${issue.status}</strong></p>
           ${details}${desc}
         `);
+        toList = ["maintenance@highbankco.com"];
+        ccList = ["ccarter@highbankco.com", ownerEmail, reportedByEmail];
         break;
       }
       default:
         return NextResponse.json({ error: "Unknown type" }, { status: 400 });
     }
 
-    const intendedTo = [ownerEmail, ...(managerEmails || [])].filter(Boolean);
-
-    // TODO: Remove test mode before go-live
-    const to = TEST_MODE ? TEST_EMAIL : (intendedTo.length > 0 ? intendedTo.join(", ") : TEST_EMAIL);
-
-    if (TEST_MODE) {
-      console.log(`[TEST MODE] Email "${subject}" would go to: ${intendedTo.join(", ") || "(no recipients)"} — redirected to ${TEST_EMAIL}`);
-    }
+    const to = dedupe(toList);
+    const cc = dedupe(ccList.filter((e) => e && !to.map((t) => t.toLowerCase()).includes(e.toLowerCase())));
 
     await transporter.sendMail({
-      from: `"High Bank Maintenance Log" <no-reply@highbankco.com>`,
-      to,
+      from: `"High Bank Maintenance" <no-reply@highbankco.com>`,
+      to: to.join(", "),
+      cc: cc.length > 0 ? cc.join(", ") : undefined,
       subject,
       html,
     });
