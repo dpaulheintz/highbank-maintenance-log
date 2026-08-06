@@ -115,3 +115,12 @@ export interface Comment {
   is_update: boolean;
   created_at: string;
 }
+
+export interface ToastComment {
+  id: string;
+  toast_request_id: string;
+  author: string;
+  body: string;
+  attachment_urls: string[];
+  created_at: string;
+}

@@ -136,6 +136,32 @@ async function handleToastEmail(type: string, body: Record<string, unknown>): Pr
       ccList = ["ccarter@highbankco.com"];
       break;
     }
+    case "toast_comment": {
+      const commentText = body.commentText as string || "";
+      const commentAuthor = body.commentAuthor as string || "Charles";
+      const attachmentUrls = (body.attachmentUrls as string[] | undefined) || [];
+      const attachmentHtml = attachmentUrls.length > 0
+        ? `<p style="margin:12px 0 4px;font-size:13px;color:#9e9a8f;">Attachments:</p>
+           <div>${attachmentUrls.map((url) => {
+             const name = url.split("/").pop() || "file";
+             const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(name);
+             return isImage
+               ? `<a href="${url}" style="display:inline-block;margin:4px 4px 4px 0;"><img src="${url}" alt="${name}" style="max-width:200px;max-height:150px;border-radius:6px;border:1px solid #ddd;" /></a>`
+               : `<a href="${url}" style="display:inline-block;margin:4px 4px 4px 0;padding:6px 12px;background:#f5f4f0;border-radius:4px;font-size:13px;color:#1C1B18;text-decoration:none;">${name}</a>`;
+           }).join("")}</div>`
+        : "";
+      subject = `Comment on your Toast request: ${req.menu_item_name || req.change_type} — ${req.location}`;
+      html = branded(`
+        <h2 style="margin:0 0 4px;font-size:18px;color:#1C1B18;">New Comment on Your Toast Request</h2>
+        <p style="margin:0 0 4px;color:#9e9a8f;font-size:13px;">From <strong>${commentAuthor}</strong></p>
+        <div style="background:#f9f8f6;border-left:3px solid #C8922A;padding:12px 16px;margin:16px 0;font-size:14px;color:#1C1B18;white-space:pre-wrap;">${commentText}</div>
+        ${attachmentHtml}
+        ${toastTable(req)}
+      `, toastSubtitle);
+      toList = [req.submitter_email];
+      ccList = ["ccarter@highbankco.com"];
+      break;
+    }
     default:
       return NextResponse.json({ error: "Unknown toast type" }, { status: 400 });
   }
@@ -159,7 +185,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { type } = body;
 
-    if (type === "toast_new_request" || type === "toast_published" || type === "toast_rejected") {
+    if (type === "toast_new_request" || type === "toast_published" || type === "toast_rejected" || type === "toast_comment") {
       return await handleToastEmail(type, body);
     }
 

@@ -71,9 +71,12 @@ export interface ToastEmailPayload {
 }
 
 export async function sendToastEmail(payload: {
-  type: "toast_new_request" | "toast_published" | "toast_rejected";
+  type: "toast_new_request" | "toast_published" | "toast_rejected" | "toast_comment";
   toastRequest: ToastEmailPayload;
   rejection_reason?: string | null;
+  commentText?: string;
+  commentAuthor?: string;
+  attachmentUrls?: string[];
 }) {
   try {
     await fetch("/api/send-email", {

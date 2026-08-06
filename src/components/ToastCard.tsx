@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { sendToastEmail } from "@/lib/email";
 import type { ToastEmailPayload } from "@/lib/email";
 import type { ToastRequest } from "@/lib/types";
+import ToastCommentSection from "./ToastCommentSection";
 
 const CHANGE_TYPE_COLORS: Record<string, string> = {
   "Price Change": "#60a5fa",
@@ -274,6 +275,8 @@ export default function ToastCard({ request, onUpdate, rejected }: Props) {
                 )}
               </div>
             )}
+
+            <ToastCommentSection request={request} />
 
             <div className="border-t border-border pt-2">
               {archiveConfirm ? (
