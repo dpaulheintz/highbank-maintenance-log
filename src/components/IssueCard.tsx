@@ -73,6 +73,8 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completeConfirm, setCompleteConfirm] = useState(false);
 
   const overdue = checkOverdue(issue.estimated_repair_date, issue.status);
   const ownerName = issue.employees?.name || issue.owner || null;
@@ -169,6 +171,33 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
     setDeleting(false);
     if (!error) {
       onDelete?.(issue.id);
+    }
+  }
+
+  async function handleMarkComplete() {
+    setCompleting(true);
+    const now = new Date();
+    const { data, error } = await supabase
+      .from("issues")
+      .update({
+        status: "Complete",
+        completed_at: now.toISOString(),
+        completion_date: now.toISOString().split("T")[0],
+      })
+      .eq("id", issue.id)
+      .select("*, vendors(*), employees!issues_owner_id_fkey(*)")
+      .single();
+
+    setCompleting(false);
+    setCompleteConfirm(false);
+    if (!error && data) {
+      const updated = data as IssueWithRelations;
+      const vendorName = updated.vendors?.name || null;
+      const newOwner = employees.find((e) => e.id === updated.owner_id);
+      const emailIssue = buildEmailIssue(updated, locationName, vendorName);
+      const rptEmail = updated.reported_by_email || null;
+      sendEmail({ type: "status_changed", issue: emailIssue, ownerEmail: newOwner?.email, ownerName: newOwner?.name, oldStatus: issue.status, reportedByEmail: rptEmail });
+      onUpdate(updated);
     }
   }
 
@@ -292,6 +321,33 @@ export default function IssueCard({ issue, vendors, employees, locationName, onU
                 >
                   Edit Issue
                 </button>
+                {issue.status !== "Complete" && (
+                  !completeConfirm ? (
+                    <button
+                      onClick={() => setCompleteConfirm(true)}
+                      className="text-xs text-[#22c55e] hover:text-[#16a34a] font-medium cursor-pointer"
+                    >
+                      Mark as Complete
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-text-muted">Mark complete?</span>
+                      <button
+                        onClick={handleMarkComplete}
+                        disabled={completing}
+                        className="text-xs text-[#22c55e] font-medium cursor-pointer disabled:opacity-50"
+                      >
+                        {completing ? "Completing..." : "Confirm"}
+                      </button>
+                      <button
+                        onClick={() => setCompleteConfirm(false)}
+                        className="text-xs text-text-muted cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
 
               <UpdateSection issue={issue} employees={employees} locationName={locationName} />

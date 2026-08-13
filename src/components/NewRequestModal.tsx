@@ -136,6 +136,7 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) { setError("Title is required"); return; }
+    if (!reportedByEmail.trim()) { setError("Your email is required"); return; }
     if (!locationId) { setError("Please select a location"); return; }
     if (!ownerId) { setError("Please select an owner"); return; }
 
@@ -242,6 +243,21 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
           <FormField label="Issue Title" required>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Walk-in cooler not maintaining temp" className="form-input" />
           </FormField>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Your Name">
+              <input value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} placeholder="Your name" className="form-input" />
+            </FormField>
+            <FormField label="Your Email" required>
+              <input
+                type="email"
+                value={reportedByEmail}
+                onChange={(e) => setReportedByEmail(e.target.value)}
+                placeholder="you@highbankco.com"
+                className="form-input"
+              />
+            </FormField>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Category">
@@ -369,23 +385,8 @@ export default function NewRequestModal({ locations: propLocations, vendors: pro
             </div>
           </FormField>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Report Date">
-              <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="form-input" />
-            </FormField>
-            <FormField label="Reported By">
-              <input value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} placeholder="Your name" className="form-input" />
-            </FormField>
-          </div>
-
-          <FormField label="Your Email (optional)">
-            <input
-              type="email"
-              value={reportedByEmail}
-              onChange={(e) => setReportedByEmail(e.target.value)}
-              placeholder="you@highbankco.com"
-              className="form-input"
-            />
+          <FormField label="Report Date">
+            <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="form-input" />
           </FormField>
 
           <div className="flex justify-end gap-3 pt-2">
