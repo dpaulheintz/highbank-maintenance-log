@@ -7,6 +7,7 @@ import IssueCard from "./IssueCard";
 import FilterBar from "./FilterBar";
 import NewRequestModal from "./NewRequestModal";
 import ToastDashboard from "./ToastDashboard";
+import SalesDashboard from "./SalesDashboard";
 import Sidebar from "./Sidebar";
 import Image from "next/image";
 
@@ -24,7 +25,13 @@ function shortName(name: string): string {
     .replace("High Bank ", "");
 }
 
-type Tab = "maintenance" | "toast";
+type Tab = "maintenance" | "toast" | "sales";
+
+const TAB_SUBTITLES: Record<Tab, string> = {
+  maintenance: "Maintenance & Repair Log",
+  toast: "Toast Change Log",
+  sales: "Server Sales",
+};
 
 export default function Dashboard() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -147,20 +154,23 @@ export default function Dashboard() {
               priority
             />
             <p className="text-sm sm:text-base text-text-muted tracking-[0.25em] uppercase hidden sm:block" style={{ fontFamily: "'Calibri', sans-serif" }}>
-              {activeTab === "toast" ? "Toast Change Log" : "Maintenance & Repair Log"}
+              {TAB_SUBTITLES[activeTab]}
             </p>
           </div>
-          <button
-            onClick={handleNewRequest}
-            className="px-4 py-2 bg-accent text-bg text-sm font-medium rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
-          >
-            + New Request
-          </button>
+          {activeTab !== "sales" && (
+            <button
+              onClick={handleNewRequest}
+              className="px-4 py-2 bg-accent text-bg text-sm font-medium rounded-lg hover:bg-accent-hover transition-colors cursor-pointer"
+            >
+              + New Request
+            </button>
+          )}
         </div>
 
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 pl-16 flex gap-1 border-t border-border/50">
+        <div className="max-w-[1800px] mx-auto px-2 sm:px-6 sm:pl-16 flex gap-1 border-t border-border/50">
           <TabButton label="Maintenance Log" active={activeTab === "maintenance"} onClick={() => setActiveTab("maintenance")} />
-          <TabButton label="Toast Change Log" active={activeTab === "toast"} onClick={() => setActiveTab("toast")} />
+          <TabButton label="Toast Log" active={activeTab === "toast"} onClick={() => setActiveTab("toast")} />
+          <TabButton label="Server Sales" active={activeTab === "sales"} onClick={() => setActiveTab("sales")} />
         </div>
       </header>
 
@@ -265,9 +275,13 @@ export default function Dashboard() {
             )}
           </main>
         </>
-      ) : (
+      ) : activeTab === "toast" ? (
         <main className="flex-1 flex flex-col max-w-[1800px] mx-auto w-full">
           <ToastDashboard newRequestTrigger={toastTrigger} />
+        </main>
+      ) : (
+        <main className="flex-1 max-w-[1800px] mx-auto w-full px-4 sm:px-6 pb-8">
+          <SalesDashboard />
         </main>
       )}
 
@@ -288,7 +302,7 @@ function TabButton({ label, active, onClick }: { label: string; active: boolean;
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-xs font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
+      className={`px-2.5 sm:px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer border-b-2 -mb-px ${
         active
           ? "border-accent text-accent"
           : "border-transparent text-text-muted hover:text-text"
